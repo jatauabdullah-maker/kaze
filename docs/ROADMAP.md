@@ -6,15 +6,15 @@
 - Portable runtime and engine bootstrap
 - Local queue, progress events, history, and repair flow
 - Versioned platform contract and capability model
+- Video server protocol 2: `/inspect`, real format metadata, typed errors, format validation
+- Video UI: Connect, Inspect, Choose format, Configure, Download
 
 ## Next
 
-1. Add `/inspect` and normalized format metadata to the local video server.
-2. Change the video UI from direct Grab to Inspect, Configure, Download.
-3. Extract AnimePahe behavior behind an anime source adapter contract.
-4. Add episode-first source inspection with verified and sampled states.
-5. Build the unified Kaze showcase and shared visual system.
-6. Move user data outside replaceable server files and add capability/version checks.
+1. Extract AnimePahe behavior behind an anime source adapter contract.
+2. Add episode-first source inspection with verified and sampled states.
+3. Build the unified Kaze showcase and shared visual system.
+4. Move user data outside replaceable server files and add capability/version checks.
 
 ## Acceptance Rule
 
