@@ -2,6 +2,8 @@
 
 Premium UI (Vercel) + local companion server (yt-dlp). Downloads run 100% on the user's PC.
 
+The long-term platform contract lives in [`docs/PLATFORM.md`](docs/PLATFORM.md). Product modules and source adapters must use its capability and versioning rules.
+
 ```
 kaze-web/
 ├─ site/          ← deploy this folder to Vercel (static, no build step)
@@ -12,6 +14,10 @@ kaze-web/
     ├─ Kaze.bat   ← user-facing menu: install / start / autostart / off
     └─ server.py  ← stdlib-only Python, port 8619
 ```
+
+## Product family
+
+Kaze is intended to grow beyond this first video surface. The planned modules are the public showcase, the Anime Chrome extension, and the local video grabber. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the build order.
 
 ## How it fits together
 

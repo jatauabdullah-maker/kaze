@@ -21,10 +21,12 @@ HISTORY_FILE = os.path.join(ROOT, "history.json")
 PID_FILE = os.path.join(ROOT, "server.pid")
 
 PORT = 8619
-VERSION = "2.0.0"
-PROTOCOL = 1
+VERSION = "2.1.0"
+PROTOCOL = 2
 MAX_PARALLEL = 3
 SITE_URL = "https://kaze-downloader.vercel.app"
+INSPECTION_TTL = 15 * 60
+INSPECTION_TIMEOUT = 45
 
 QUALITIES = {"best", "2160", "1440", "1080", "720", "480", "360"}
 AUDIO_FORMATS = {"mp3", "m4a"}
@@ -33,6 +35,7 @@ lock = threading.RLock()
 jobs = {}
 sse_clients = []
 history = []
+inspections = {}
 
 CREATE_NO_WINDOW = 0x08000000
 
@@ -87,6 +90,8 @@ def job_public(j):
         "mode": j["mode"],
         "quality": j["quality"],
         "audioFormat": j["audio_format"],
+        "formatId": j.get("format_id"),
+        "formatLabel": j.get("format_label"),
         "filename": j["filename"],
         "error": j["error"],
         "percent": j["percent"],
@@ -101,6 +106,167 @@ def job_public(j):
 
 def push_job(j):
     broadcast("job", job_public(j))
+
+
+def error_payload(code, message, retryable=False, action=None):
+    return {
+        "ok": False,
+        "error": {
+            "code": code,
+            "message": message,
+            "retryable": retryable,
+            "action": action,
+        },
+    }
+
+
+def capabilities():
+    return {
+        "inspect": True,
+        "formats": True,
+        "audio": True,
+        "subtitles": True,
+        "thumbnails": True,
+        "metadata": True,
+        "playlists": True,
+        "sponsorblock": True,
+        "history": True,
+        "updates": True,
+    }
+
+
+def clean_number(value):
+    return value if isinstance(value, (int, float)) else None
+
+
+def duration_text(seconds):
+    if not isinstance(seconds, (int, float)) or seconds < 0:
+        return ""
+    seconds = int(seconds)
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def normalize_format(fmt):
+    video = fmt.get("vcodec") not in (None, "none")
+    audio = fmt.get("acodec") not in (None, "none")
+    if not video and not audio:
+        return None
+    height = fmt.get("height") if video else None
+    ext = fmt.get("ext") or ""
+    size = fmt.get("filesize") or fmt.get("filesize_approx")
+    if video:
+        label = f"{height}p" if height else "Video"
+        if ext:
+            label += f" {ext.upper()}"
+        if not audio:
+            label += " · video only"
+    else:
+        abr = fmt.get("abr")
+        label = f"{ext.upper() or 'Audio'}"
+        if abr:
+            label += f" · {round(abr)} kbps"
+    return {
+        "formatId": str(fmt.get("format_id") or ""),
+        "type": "video" if video else "audio",
+        "ext": ext,
+        "height": height,
+        "width": fmt.get("width") if video else None,
+        "fps": fmt.get("fps") if video else None,
+        "vcodec": fmt.get("vcodec") if video else None,
+        "acodec": fmt.get("acodec") if audio else None,
+        "hasAudio": audio,
+        "filesize": size,
+        "filesizeApprox": bool(fmt.get("filesize") is None and fmt.get("filesize_approx")),
+        "abr": fmt.get("abr") if not video else None,
+        "label": label,
+    }
+
+
+def normalize_inspection(info, url):
+    raw_formats = [normalize_format(x) for x in info.get("formats") or []]
+    formats = []
+    seen = set()
+    for fmt in raw_formats:
+        if not fmt or not fmt["formatId"] or fmt["formatId"] in seen:
+            continue
+        seen.add(fmt["formatId"])
+        formats.append(fmt)
+    subtitles = sorted(set((info.get("subtitles") or {}).keys()))
+    automatic = sorted(set((info.get("automatic_captions") or {}).keys()))
+    entries = info.get("entries") or []
+    return {
+        "url": url,
+        "webpageUrl": info.get("webpage_url") or url,
+        "title": info.get("title") or "Untitled video",
+        "uploader": info.get("uploader") or info.get("channel") or "",
+        "channel": info.get("channel") or "",
+        "duration": clean_number(info.get("duration")),
+        "durationText": duration_text(info.get("duration")),
+        "thumbnail": info.get("thumbnail") or "",
+        "extractor": info.get("extractor_key") or info.get("extractor") or "",
+        "isPlaylist": info.get("_type") == "playlist" or bool(info.get("playlist_count")),
+        "playlistTitle": info.get("playlist_title") or info.get("title") if info.get("_type") == "playlist" else "",
+        "playlistCount": info.get("playlist_count") or len(entries) or 0,
+        "formats": formats,
+        "subtitles": subtitles,
+        "automaticSubtitles": automatic,
+        "warnings": [],
+    }
+
+
+def prune_inspections():
+    now = time.time()
+    with lock:
+        for key, record in list(inspections.items()):
+            if now - record["createdAt"] > INSPECTION_TTL:
+                inspections.pop(key, None)
+
+
+def inspect_url(url):
+    if not re.match(r"^https?://", url):
+        return None, error_payload("INVALID_URL", "Paste a complete http or https link.", False, "edit_url")
+    if len(url) > 2048:
+        return None, error_payload("INVALID_URL", "That link is too long to inspect.", False, "edit_url")
+    if not os.path.exists(YTDLP):
+        return None, error_payload("ENGINE_MISSING", "yt-dlp is missing. Run Kaze.bat option 1 to repair it.", True, "repair")
+    prune_inspections()
+    args = [YTDLP, "--dump-single-json", "--no-warnings", "--no-playlist", "--skip-download", url]
+    try:
+        proc = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=INSPECTION_TIMEOUT,
+            cwd=DOWNLOAD_DIR,
+            creationflags=CREATE_NO_WINDOW,
+        )
+    except subprocess.TimeoutExpired:
+        return None, error_payload("INSPECTION_TIMEOUT", "The source took too long to respond. Try again.", True, "retry")
+    except OSError as e:
+        if getattr(e, "winerror", None) in (193, 216):
+            return None, error_payload("ENGINE_BROKEN", "yt-dlp looks broken. Run Kaze.bat option 1 to repair it.", True, "repair")
+        return None, error_payload("INSPECTION_FAILED", str(e), True, "retry")
+    if proc.returncode != 0:
+        raw = (proc.stderr or proc.stdout or "").strip()
+        msg = friendly_error(raw)
+        if msg:
+            code = "AUTH_REQUIRED" if "sign-in" in msg or "sign in" in msg else "VIDEO_UNAVAILABLE"
+            return None, error_payload(code, msg, False, "edit_url")
+        return None, error_payload("INSPECTION_FAILED", "The source could not be inspected. Check the link and try again.", True, "retry")
+    try:
+        info = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        return None, error_payload("INSPECTION_FAILED", "The source returned unreadable metadata.", True, "retry")
+    normalized = normalize_inspection(info, url)
+    inspection_id = uuid.uuid4().hex[:16]
+    with lock:
+        inspections[inspection_id] = {"createdAt": time.time(), "data": normalized}
+    normalized["inspectionId"] = inspection_id
+    return normalized, None
 
 
 def friendly_error(text):
@@ -138,9 +304,16 @@ def build_args(job):
         "--print", "after_move:KAZEFILE|%(filepath)s",
     ]
     if job["mode"] == "audio":
+        if job.get("format_id"):
+            a += ["-f", job["format_id"]]
         a += ["-x", "--audio-format", job["audio_format"], "--embed-thumbnail", "--embed-metadata"]
     else:
-        if job["quality"] == "best":
+        if job.get("format_id"):
+            selector = job["format_id"]
+            if not job.get("format_has_audio"):
+                selector += "+ba"
+            a += ["-f", selector]
+        elif job["quality"] == "best":
             a += ["-f", "bv*+ba/b"]
         else:
             a += ["-f", f"bv*[height<={job['quality']}]+ba/b[height<={job['quality']}]"]
@@ -248,6 +421,8 @@ def worker(job_id):
                     "size": size,
                     "mode": j["mode"],
                     "quality": j["quality"],
+                    "formatId": j.get("format_id"),
+                    "formatLabel": j.get("format_label"),
                     "seconds": round(time.time() - started, 1),
                     "finishedAt": int(time.time()),
                 })
@@ -308,10 +483,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Private-Network", "true")
 
     def send_json(self, obj, code=200):
-        body = json.dumps(obj).encode()
+        body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
         self.cors()
-        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -330,12 +505,22 @@ class Handler(BaseHTTPRequestHandler):
                 "name": "kaze-server",
                 "version": VERSION,
                 "protocol": PROTOCOL,
+                "module": "video",
+                "provider": "yt-dlp",
+                "capabilities": capabilities(),
                 "downloadsDir": DOWNLOAD_DIR,
             })
         elif path == "/state":
             with lock:
                 self.send_json({
-                    "server": {"ok": True, "version": VERSION, "protocol": PROTOCOL},
+                    "server": {
+                        "ok": True,
+                        "version": VERSION,
+                        "protocol": PROTOCOL,
+                        "module": "video",
+                        "provider": "yt-dlp",
+                        "capabilities": capabilities(),
+                    },
                     "downloadsDir": DOWNLOAD_DIR,
                     "jobs": [job_public(j) for j in jobs.values()],
                     "history": history[-300:],
@@ -372,7 +557,7 @@ class Handler(BaseHTTPRequestHandler):
             sse_clients.append(myq)
         self.send_response(200)
         self.cors()
-        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "keep-alive")
         self.end_headers()
@@ -396,7 +581,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
-        if path != "/jobs":
+        if path not in ("/inspect", "/jobs"):
             self.send_json({"ok": False, "error": "not found"}, 404)
             return
         if (self.headers.get("Content-Type") or "").split(";")[0].strip().lower() != "application/json":
@@ -409,12 +594,38 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": False, "error": "bad json"}, 400)
             return
         url = str(data.get("url") or "").strip()
+
+        if path == "/inspect":
+            inspected, error = inspect_url(url)
+            if error:
+                code = error["error"]["code"]
+                status = 400 if code == "INVALID_URL" else 422
+                self.send_json(error, status)
+                return
+            self.send_json({"ok": True, "inspection": inspected})
+            return
+
         if not re.match(r"^https?://", url):
-            self.send_json({"ok": False, "error": "a direct link is required"}, 400)
+            self.send_json(error_payload("INVALID_URL", "Paste a complete http or https link.", False, "edit_url"), 400)
             return
         mode = data.get("mode", "video")
         quality = str(data.get("quality", "best"))
         audio_format = str(data.get("audioFormat", "mp3"))
+        inspection_id = str(data.get("inspectionId") or "")
+        format_id = str(data.get("formatId") or "")
+        selected_format = None
+        if inspection_id:
+            prune_inspections()
+            with lock:
+                record = inspections.get(inspection_id)
+            if not record or record["data"]["url"] != url:
+                self.send_json(error_payload("INSPECTION_EXPIRED", "Inspect this link again before downloading.", True, "inspect"), 409)
+                return
+            if format_id:
+                selected_format = next((x for x in record["data"]["formats"] if x["formatId"] == format_id), None)
+                if not selected_format:
+                    self.send_json(error_payload("FORMAT_UNAVAILABLE", "That format is no longer available. Inspect the link again.", True, "inspect"), 409)
+                    return
         if mode not in ("video", "audio"):
             mode = "video"
         if quality not in QUALITIES:
@@ -429,6 +640,10 @@ class Handler(BaseHTTPRequestHandler):
             "mode": mode,
             "quality": quality,
             "audio_format": audio_format,
+            "inspection_id": inspection_id or None,
+            "format_id": format_id or None,
+            "format_label": selected_format["label"] if selected_format else None,
+            "format_has_audio": selected_format["hasAudio"] if selected_format else False,
             "thumbnail": bool(data.get("thumbnail", True)),
             "metadata": bool(data.get("metadata", True)),
             "subs": bool(data.get("subs", False)),
