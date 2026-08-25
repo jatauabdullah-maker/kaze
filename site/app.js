@@ -827,7 +827,11 @@ els.url.addEventListener("keydown", (e) => { if (e.key === "Enter") doInspect();
 els.download.addEventListener("click", submitDownload);
 els.zip.addEventListener("click", () => {
   toast("Opening the Kaze Server download…");
-  window.open(ZIP_URL, "_blank", "noopener");
+  const a = document.createElement("a");
+  a.href = ZIP_URL;
+  a.target = "_blank";
+  a.rel = "noopener";
+  a.click();
 });
 els.how.addEventListener("click", () => wizard("How Kaze works", "The website is the remote control. The muscle runs on your PC:"));
 els.controls.addEventListener("click", controlsModal);

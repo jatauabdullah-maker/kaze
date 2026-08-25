@@ -104,9 +104,7 @@ pause
 goto menu
 
 :startnow
-set "STARTED=0"
-call :pingsrv && set "STARTED=1"
-if "!STARTED!"=="1" (
+call :pingsrv && (
     echo   Server is ALREADY running and responding.
     timeout /t 2 /nobreak >nul
     goto menu
@@ -115,9 +113,19 @@ call :stopproc
 call :validpe "%PY%" || goto needinit
 call :validpe "%YTDLP%" || goto needinit
 echo   Starting server...
-start "KazeServer" /min cmd /c """%PY%" "server.py"""
-timeout /t 2 /nobreak >nul
-call :checkrunning && (echo   Server is UP - you can close this and go back to the site.) || (echo   Server did not start - check kaze-server.log next to the bat.)
+start "KazeServer" /min "%PY%" server.py
+echo   Waiting for it to come online...
+set /a TRIES=0
+:waitloop
+timeout /t 1 /nobreak >nul
+call :pingsrv && goto started_ok
+set /a TRIES+=1
+if %TRIES% lss 12 goto waitloop
+echo   Server did not start in time - check logs\kaze-server.log next to the bat.
+timeout /t 3 /nobreak >nul
+goto menu
+:started_ok
+echo   Server is UP - you can close this and go back to the site.
 timeout /t 3 /nobreak >nul
 goto menu
 
@@ -130,7 +138,7 @@ goto init
 cd /d "%~dp0"
 call :validpe "%PY%" || exit /b 1
 call :validpe "%YTDLP%" || exit /b 1
-start "KazeServer" /min cmd /c """%PY%" "server.py"""
+start "KazeServer" /min "%PY%" server.py
 exit /b 0
 
 :autostart
@@ -139,7 +147,7 @@ if errorlevel 1 (
     echo   Could not create the auto-start task.
 ) else (
     call :stopproc
-    start "KazeServer" /min cmd /c """%PY%" "server.py"""
+    start "KazeServer" /min "%PY%" server.py
     echo   Auto-start enabled. Server is running now and will
     echo   always be available when you log into Windows.
 )
@@ -164,6 +172,8 @@ taskkill /FI "WINDOWTITLE eq KazeServer*" /F >nul 2>&1
 exit /b 0
 
 :pingsrv
+curl -s -o NUL --noproxy "*" -m 2 http://127.0.0.1:8619/ping 2>NUL
+if not errorlevel 1 exit /b 0
 powershell -NoProfile -Command "try{[void](Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 'http://127.0.0.1:8619/ping');exit 0}catch{exit 1}"
 exit /b %errorlevel%
 
