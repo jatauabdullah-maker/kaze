@@ -3,6 +3,7 @@ runtime/
 bin/
 history.json
 server.pid
+kaze-server.log
 *.zip
 node_modules/
 .vercel
