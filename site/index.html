@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kaze — grab any video</title>
+<meta name="description" content="Kaze downloads videos and audio from YouTube, Dailymotion and hundreds more sites. Runs locally on your PC — fast, private, free.">
+<meta name="theme-color" content="#0b0c10">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%237c5cff'/%3E%3Cpath d='M14 26h22a6 6 0 1 0-6-6M12 36h30a6 6 0 1 1-6 6M18 46h12' stroke='%23fff' stroke-width='4' stroke-linecap='round' fill='none'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="orb orb-a" aria-hidden="true"></div>
+<div class="orb orb-b" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="wrap bar-inner">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="url(#lg)"/><defs><linearGradient id="lg" x1="0" y1="0" x2="64" y2="64"><stop offset="0" stop-color="#7c5cff"/><stop offset="1" stop-color="#38bdf8"/></linearGradient></defs><path d="M14 26h22a6 6 0 1 0-6-6M12 36h30a6 6 0 1 1-6 6M18 46h12" stroke="#fff" stroke-width="4" stroke-linecap="round" fill="none"/></svg>
+      </span>
+      <span class="brand-name">Kaze</span>
+      <span class="brand-sub">video grabber</span>
+    </div>
+    <div class="bar-right">
+      <span id="status-pill" class="pill pill-off"><i></i><b>offline</b></span>
+      <button class="btn btn-ghost" id="btn-controls">Server controls</button>
+    </div>
+  </div>
+</header>
+
+<main>
+<section class="hero wrap">
+  <h1>Grab any video.<br><span class="grad">One click.</span></h1>
+  <p class="lede">YouTube, Dailymotion, TikTok and hundreds more. Downloads run on <b>your</b> PC through your own Kaze Server — nothing passes through our hands.</p>
+  <div class="hero-cta">
+    <button class="btn btn-primary btn-big" id="btn-check">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+      Check my PC
+    </button>
+    <button class="btn btn-ghost btn-big" id="btn-download-zip">Download server (.zip)</button>
+  </div>
+  <p class="hint-line">First time? <button class="linklike" id="btn-how">See how it works</button></p>
+</section>
+
+<section class="wrap features" aria-label="Why Kaze">
+  <div class="feature">
+    <div class="f-icon">🔒</div>
+    <h3>Private by design</h3>
+    <p>Downloads stream straight to your disk. The website is only a remote control — we never see your links or files.</p>
+  </div>
+  <div class="feature">
+    <div class="f-icon">🌐</div>
+    <h3>1000+ sites</h3>
+    <p>YouTube, Dailymotion, TikTok, X, SoundCloud and hundreds more, powered by the yt-dlp engine.</p>
+  </div>
+  <div class="feature">
+    <div class="f-icon">🛠️</div>
+    <h3>Self-repairing</h3>
+    <p>Sites change all the time. When one breaks, Kaze tells you exactly how to fix it in one click.</p>
+  </div>
+</section>
+
+<section class="wrap panel-zone hidden" id="setup-zone"></section>
+
+<section class="wrap dash hidden" id="dashboard">
+  <div class="card composer">
+    <div class="composer-row">
+      <input type="url" id="url-input" placeholder="Paste a video link — youtube.com, dailymotion.com, …" spellcheck="false">
+      <button class="btn btn-primary" id="btn-grab">Grab</button>
+    </div>
+    <div class="options">
+      <div class="seg" role="tablist" id="mode-seg">
+        <button class="seg-btn active" data-mode="video">Video</button>
+        <button class="seg-btn" data-mode="audio">Audio</button>
+      </div>
+      <label class="opt-select">
+        <span id="quality-label">Quality</span>
+        <select id="quality">
+          <option value="best">Best available</option>
+          <option value="2160">2160p · 4K</option>
+          <option value="1440">1440p · 2K</option>
+          <option value="1080" selected>1080p</option>
+          <option value="720">720p</option>
+          <option value="480">480p</option>
+          <option value="360">360p</option>
+        </select>
+      </label>
+      <label class="opt-select hidden" id="audio-format-wrap">
+        <span>Format</span>
+        <select id="audio-format">
+          <option value="mp3" selected>MP3</option>
+          <option value="m4a">M4A</option>
+        </select>
+      </label>
+      <span class="spacer"></span>
+      <label class="switch"><input type="checkbox" id="opt-thumb" checked><i></i>Thumbnail</label>
+      <label class="switch"><input type="checkbox" id="opt-subs"><i></i>Subtitles</label>
+      <label class="switch"><input type="checkbox" id="opt-sponsor"><i></i>Skip sponsors</label>
+      <label class="switch"><input type="checkbox" id="opt-playlist"><i></i>Full playlist</label>
+    </div>
+    <p class="composer-note" id="composer-note"></p>
+  </div>
+
+  <div class="grid-2">
+    <section class="card">
+      <h2>Queue <span class="count" id="queue-count">0</span></h2>
+      <ul class="list" id="queue-list"></ul>
+      <p class="empty" id="queue-empty">Nothing grabbing yet. Paste a link above.</p>
+    </section>
+    <section class="card">
+      <h2>History <span class="count" id="history-count">0</span></h2>
+      <ul class="list" id="history-list"></ul>
+      <p class="empty" id="history-empty">Finished grabs land here.</p>
+    </section>
+  </div>
+
+  <p class="dash-foot">Files are saved to <code id="dl-dir">your Downloads\KazeVideos folder</code>.</p>
+</section>
+</main>
+
+<footer class="foot wrap">
+  <span>Kaze runs 100% locally. The website is just the remote control.</span>
+</footer>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<div class="modal-root hidden" id="modal-root">
+  <div class="modal-card" id="modal-card" role="dialog" aria-modal="true"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
