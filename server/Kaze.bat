@@ -101,11 +101,14 @@ pause
 goto menu
 
 :startnow
-call :checkrunning && (
-    echo   Server is ALREADY running - nothing to do.
+set "STARTED=0"
+call :pingsrv && set "STARTED=1"
+if "!STARTED!"=="1" (
+    echo   Server is ALREADY running and responding.
     timeout /t 2 /nobreak >nul
     goto menu
 )
+call :stopproc
 call :validpe "%PY%" || goto needinit
 call :validpe "%YTDLP%" || goto needinit
 echo   Starting server...
@@ -148,6 +151,7 @@ timeout /t 3 /nobreak >nul
 goto menu
 
 :stopproc
+for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":8619" ^| findstr "LISTENING"') do taskkill /PID %%P /F >nul 2>&1
 if exist "server.pid" (
     set /p KPID=<server.pid
     if not "!KPID!"=="" taskkill /PID !KPID! /F >nul 2>&1
@@ -156,12 +160,13 @@ if exist "server.pid" (
 taskkill /FI "WINDOWTITLE eq KazeServer*" /F >nul 2>&1
 exit /b 0
 
+:pingsrv
+powershell -NoProfile -Command "try{[void](Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 'http://127.0.0.1:8619/ping');exit 0}catch{exit 1}"
+exit /b %errorlevel%
+
 :checkrunning
-set "OK=0"
-set "KCPID="
-if exist "server.pid" set /p KCPID=<server.pid
-if defined KCPID tasklist /FI "PID eq !KCPID!" 2>nul | find /I "python" >nul && set "OK=1"
-exit /b !OK!
+call :pingsrv
+exit /b %errorlevel%
 
 :fail
 echo.

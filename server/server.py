@@ -495,36 +495,53 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json({"ok": False, "error": "not found"}, 404)
 
 
+def bind_server():
+    while True:
+        try:
+            srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+            srv.daemon_threads = True
+            srv.handle_error = _swallow_connection_errors
+            return srv
+        except OSError as e:
+            if getattr(e, "winerror", None) == 10048:
+                try:
+                    import urllib.request
+                    with urllib.request.urlopen(f"http://127.0.0.1:{PORT}/ping", timeout=2) as r:
+                        if r.status == 200:
+                            log.info("another Kaze Server already owns port %s - nothing to do", PORT)
+                            sys.exit(0)
+                except Exception:
+                    pass
+                log.info("port %s busy - retrying in 2s", PORT)
+                time.sleep(2)
+            else:
+                raise
+
+
 def main():
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
     load_history()
     if not os.path.exists(YTDLP):
         log.error("yt-dlp missing - run Kaze.bat option 1 first.")
         sys.exit(1)
+
+    srv = bind_server()
     with open(PID_FILE, "w") as f:
         f.write(str(os.getpid()))
     threading.Thread(target=scheduler, daemon=True).start()
-
-    while True:
-        try:
-            srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-            srv.daemon_threads = True
-            srv.handle_error = _swallow_connection_errors
-            log.info("Kaze Server v%s listening on http://127.0.0.1:%s", VERSION, PORT)
-            log.info("Downloads -> %s", DOWNLOAD_DIR)
-            log.info("UI -> %s", SITE_URL)
-            srv.serve_forever()
-            break
-        except KeyboardInterrupt:
-            break
-        except Exception:
-            log.exception("server crashed - restarting in 3s")
-            time.sleep(3)
+    log.info("Kaze Server v%s listening on http://127.0.0.1:%s", VERSION, PORT)
+    log.info("Downloads -> %s", DOWNLOAD_DIR)
+    log.info("UI -> %s", SITE_URL)
 
     try:
-        os.remove(PID_FILE)
-    except OSError:
+        srv.serve_forever()
+    except KeyboardInterrupt:
         pass
+    finally:
+        try:
+            os.remove(PID_FILE)
+        except OSError:
+            pass
     log.info("stopped")
 
 
