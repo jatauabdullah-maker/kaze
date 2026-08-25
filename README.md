@@ -6,6 +6,10 @@ The long-term platform contract lives in [`docs/PLATFORM.md`](docs/PLATFORM.md).
 
 ```
 kaze-web/
+├─ showcase/      ← brand hub, deploy as `kaze-media-hub` on Vercel
+│   ├─ index.html
+│   ├─ styles.css
+│   └─ app.js
 ├─ site/          ← deploy this folder to Vercel (static, no build step)
 │   ├─ index.html
 │   ├─ styles.css
@@ -14,6 +18,11 @@ kaze-web/
     ├─ Kaze.bat   ← user-facing menu: install / start / autostart / off
     └─ server.py  ← stdlib-only Python, port 8619
 ```
+
+Live surfaces:
+
+- Showcase / brand hub: https://kaze-media-hub.vercel.app
+- Video grabber: https://kaze-downloader.vercel.app
 
 ## Product family
 

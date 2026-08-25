@@ -9,12 +9,13 @@
 - Video server protocol 2: `/inspect`, real format metadata, typed errors, format validation
 - Video UI: Connect, Inspect, Choose format, Configure, Download
 - Anime extension source-adapter layer (`sources/animepahe.js`, `sources/registry.js`) with episode-first source inspection and verified/partial/unverified states (lives in `../kaze-downloader`, v2.2.0)
+- Unified Kaze showcase at kaze-media-hub.vercel.app presenting both products with shared design tokens
 
 ## Next
 
-1. Build the unified Kaze showcase and shared visual system.
-2. Move user data outside replaceable server files and add capability/version checks in the bat/site update path.
-3. Wire poster thumbnails into the anime source adapter when a provider supports them.
+1. Move user data outside replaceable server files and add capability/version checks in the bat/site update path.
+2. Wire poster thumbnails into the anime source adapter when a provider supports them.
+3. Final cross-site QA pass (desktop + mobile) and encoding scan.
 
 ## Acceptance Rule
 

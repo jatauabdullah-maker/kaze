@@ -334,7 +334,9 @@ input { caret-color: var(--violet-strong); }
 .act-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .act-row .btn { min-height: 34px; padding: 6px 14px; font-size: 12.5px; }
 
-.foot { color: var(--muted); font-size: 12.5px; padding: 24px 20px 44px; text-align: center; }
+.foot { color: var(--muted); font-size: 12.5px; padding: 24px 20px 44px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 18px; flex-wrap: wrap; }
+.foot-links a { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+.foot-links a:hover { color: var(--text); }
 
 @media (max-width: 620px) {
   .composer-row { flex-direction: column; }
