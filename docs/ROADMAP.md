@@ -8,13 +8,13 @@
 - Versioned platform contract and capability model
 - Video server protocol 2: `/inspect`, real format metadata, typed errors, format validation
 - Video UI: Connect, Inspect, Choose format, Configure, Download
+- Anime extension source-adapter layer (`sources/animepahe.js`, `sources/registry.js`) with episode-first source inspection and verified/partial/unverified states (lives in `../kaze-downloader`, v2.2.0)
 
 ## Next
 
-1. Extract AnimePahe behavior behind an anime source adapter contract.
-2. Add episode-first source inspection with verified and sampled states.
-3. Build the unified Kaze showcase and shared visual system.
-4. Move user data outside replaceable server files and add capability/version checks.
+1. Build the unified Kaze showcase and shared visual system.
+2. Move user data outside replaceable server files and add capability/version checks in the bat/site update path.
+3. Wire poster thumbnails into the anime source adapter when a provider supports them.
 
 ## Acceptance Rule
 
