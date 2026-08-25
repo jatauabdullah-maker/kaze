@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import queue
 import re
@@ -34,6 +35,16 @@ sse_clients = []
 history = []
 
 CREATE_NO_WINDOW = 0x08000000
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+    handlers=[
+        logging.FileHandler(os.path.join(ROOT, "kaze-server.log"), encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+log = logging.getLogger("kaze")
 
 
 def load_history():
@@ -287,7 +298,7 @@ class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt, *args):
-        sys.stdout.write("[%s] %s\n" % (time.strftime("%H:%M:%S"), fmt % args))
+        log.info("%s - %s", self.address_string(), fmt % args)
 
     def cors(self):
         o = self.headers.get("Origin", "")
@@ -488,24 +499,40 @@ def main():
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
     load_history()
     if not os.path.exists(YTDLP):
-        print("yt-dlp missing - run Kaze.bat option 1 first.")
+        log.error("yt-dlp missing - run Kaze.bat option 1 first.")
         sys.exit(1)
     with open(PID_FILE, "w") as f:
         f.write(str(os.getpid()))
     threading.Thread(target=scheduler, daemon=True).start()
-    srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    print(f"Kaze Server v{VERSION} listening on http://127.0.0.1:{PORT}")
-    print(f"Downloads -> {DOWNLOAD_DIR}")
-    print(f"UI -> {SITE_URL}")
-    try:
-        srv.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
+
+    while True:
         try:
-            os.remove(PID_FILE)
-        except OSError:
-            pass
+            srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+            srv.daemon_threads = True
+            srv.handle_error = _swallow_connection_errors
+            log.info("Kaze Server v%s listening on http://127.0.0.1:%s", VERSION, PORT)
+            log.info("Downloads -> %s", DOWNLOAD_DIR)
+            log.info("UI -> %s", SITE_URL)
+            srv.serve_forever()
+            break
+        except KeyboardInterrupt:
+            break
+        except Exception:
+            log.exception("server crashed - restarting in 3s")
+            time.sleep(3)
+
+    try:
+        os.remove(PID_FILE)
+    except OSError:
+        pass
+    log.info("stopped")
+
+
+def _swallow_connection_errors(srv, handler):
+    exc_type = sys.exc_info()[0]
+    if exc_type in (BrokenPipeError, ConnectionResetError, TimeoutError):
+        return
+    log.exception("request error")
 
 
 if __name__ == "__main__":

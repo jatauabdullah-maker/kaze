@@ -21,10 +21,6 @@ echo               K A Z E   S E R V E R
 echo          video grabber - local companion
 echo   ============================================
 echo.
-if exist "%PY%" (echo    [runtime]  ready) else (echo    [runtime]  missing)
-call :validpe "%YTDLP%" && (echo    [yt-dlp ]  ready) || (echo    [yt-dlp ]  missing/broken)
-call :validpe "%FFMPEG%" && (echo    [ffmpeg ]  ready) || (echo    [ffmpeg ]  missing/broken)
-echo.
 echo    1. Initialize / Repair  ^(install or update everything^)
 echo    2. Start server now
 echo    3. Auto-start ON  ^(always available, starts with Windows^)
@@ -42,7 +38,7 @@ goto menu
 
 :validpe
 if not exist "%~1" exit /b 1
-for %%F in ("%~1") do if %%~zF LSS 1000000 exit /b 1
+for %%F in ("%~1") do if %%~zF LSS 20000 exit /b 1
 powershell -NoProfile -Command "$fs=[IO.File]::OpenRead('%~1');$b=New-Object byte[] 2;$null=$fs.Read($b,0,2);$fs.Close();if([Text.Encoding]::ASCII.GetString($b)-ne'MZ'){exit 1}"
 if errorlevel 1 exit /b 1
 exit /b 0
@@ -103,15 +99,24 @@ pause
 goto menu
 
 :startnow
+call :validpe "%PY%" || goto needinit
+call :validpe "%YTDLP%" || goto needinit
 echo   Starting server...
 start "KazeServer" /min cmd /c """%PY%" "server.py"""
 timeout /t 2 /nobreak >nul
-call :checkrunning && (echo   Server is UP - you can close this and go back to the site.) || (echo   Server did not start - run Initialize first.)
+call :checkrunning && (echo   Server is UP - you can close this and go back to the site.) || (echo   Server did not start - check kaze-server.log next to the bat.)
 timeout /t 3 /nobreak >nul
 goto menu
 
+:needinit
+echo   Components missing or broken - running Initialize first...
+timeout /t 2 /nobreak >nul
+goto init
+
 :silentstart
 cd /d "%~dp0"
+call :validpe "%PY%" || exit /b 1
+call :validpe "%YTDLP%" || exit /b 1
 start "KazeServer" /min cmd /c """%PY%" "server.py"""
 exit /b 0
 
