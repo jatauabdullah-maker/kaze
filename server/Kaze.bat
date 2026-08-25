@@ -44,7 +44,7 @@ if errorlevel 1 exit /b 1
 exit /b 0
 
 :fetchurl
-curl -L -sS --retry 2 -o "%~2" "%~1" 2>nul
+curl -L -# --retry 2 -o "%~2" "%~1"
 if not errorlevel 1 if exist "%~2" exit /b 0
 powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '%~1' -OutFile '%~2' -UseBasicParsing"
 if exist "%~2" exit /b 0
@@ -52,6 +52,8 @@ exit /b 1
 
 :init
 cls
+echo.
+echo   Installing / updating components. Do not close until you see DONE.
 echo.
 echo   [1/3] Portable Python runtime...
 if exist "%PY%" (
@@ -65,7 +67,7 @@ if exist "%PY%" (
 call :validpe "%PY%" || goto fail
 echo         OK
 
-echo   [2/3] yt-dlp engine ^(fresh latest build^)...
+echo   [2/3] yt-dlp engine ^(fresh latest build, ~18 MB^)...
 if not exist "bin" mkdir "bin"
 del "%YTDLP%" >nul 2>&1
 call :fetchurl "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" "%TEMP%\kaze-ytdlp.bin" || goto fail
@@ -73,7 +75,7 @@ move /y "%TEMP%\kaze-ytdlp.bin" "%YTDLP%" >nul
 call :validpe "%YTDLP%" || goto fail
 echo         OK
 
-echo   [3/3] FFmpeg ^(merging + audio convert^)...
+echo   [3/3] FFmpeg ^(merging + audio convert, ~90 MB - the slow one^)...
 call :validpe "%FFMPEG%"
 if not errorlevel 1 (
     echo         already installed - keeping
@@ -99,6 +101,11 @@ pause
 goto menu
 
 :startnow
+call :checkrunning && (
+    echo   Server is ALREADY running - nothing to do.
+    timeout /t 2 /nobreak >nul
+    goto menu
+)
 call :validpe "%PY%" || goto needinit
 call :validpe "%YTDLP%" || goto needinit
 echo   Starting server...
@@ -151,11 +158,10 @@ exit /b 0
 
 :checkrunning
 set "OK=0"
-if exist "server.pid" (
-    set /p CPID=<server.pid
-    tasklist /FI "PID eq %CPID%" 2>nul | find /I "python" >nul && set "OK=1"
-)
-exit /b %OK%
+set "KCPID="
+if exist "server.pid" set /p KCPID=<server.pid
+if defined KCPID tasklist /FI "PID eq !KCPID!" 2>nul | find /I "python" >nul && set "OK=1"
+exit /b !OK!
 
 :fail
 echo.
