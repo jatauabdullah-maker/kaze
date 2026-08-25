@@ -1,6 +1,8 @@
 __pycache__/
 runtime/
 bin/
+user-data/
+logs/
 history.json
 server.pid
 kaze-server.log

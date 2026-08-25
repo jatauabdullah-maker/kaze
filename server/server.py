@@ -13,15 +13,17 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(ROOT, "user-data")
+LOG_DIR = os.path.join(ROOT, "logs")
 BIN = os.path.join(ROOT, "bin")
 YTDLP = os.path.join(BIN, "yt-dlp.exe")
 FFMPEG_DIR = BIN
 DOWNLOAD_DIR = os.path.join(os.path.expanduser("~"), "Downloads", "KazeVideos")
-HISTORY_FILE = os.path.join(ROOT, "history.json")
+HISTORY_FILE = os.path.join(DATA_DIR, "history.json")
 PID_FILE = os.path.join(ROOT, "server.pid")
 
 PORT = 8619
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 PROTOCOL = 2
 MAX_PARALLEL = 3
 SITE_URL = "https://kaze-downloader.vercel.app"
@@ -39,11 +41,21 @@ inspections = {}
 
 CREATE_NO_WINDOW = 0x08000000
 
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(LOG_DIR, exist_ok=True)
+
+legacy_history = os.path.join(ROOT, "history.json")
+if os.path.exists(legacy_history) and not os.path.exists(HISTORY_FILE):
+    try:
+        os.replace(legacy_history, HISTORY_FILE)
+    except OSError:
+        pass
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
     handlers=[
-        logging.FileHandler(os.path.join(ROOT, "kaze-server.log"), encoding="utf-8"),
+        logging.FileHandler(os.path.join(LOG_DIR, "kaze-server.log"), encoding="utf-8"),
         logging.StreamHandler(sys.stdout),
     ],
 )

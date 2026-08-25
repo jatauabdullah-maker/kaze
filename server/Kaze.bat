@@ -55,6 +55,9 @@ cls
 echo.
 echo   Installing / updating components. Do not close until you see DONE.
 echo.
+if not exist "user-data" mkdir "user-data"
+if not exist "logs" mkdir "logs"
+echo.
 echo   [1/3] Portable Python runtime...
 if exist "%PY%" (
     echo         already installed - keeping
