@@ -243,6 +243,22 @@ def inspect_url(url):
         return None, error_payload("INVALID_URL", "That link is too long to inspect.", False, "edit_url")
     if not os.path.exists(YTDLP):
         return None, error_payload("ENGINE_MISSING", "yt-dlp is missing. Run Kaze.bat option 1 to repair it.", True, "repair")
+
+    broadcast("inspect", {"url": url, "phase": "start"})
+    stop_hb = threading.Event()
+    hb_started = time.time()
+
+    def heartbeat():
+        while not stop_hb.wait(2.2):
+            broadcast("inspect", {
+                "url": url,
+                "phase": "scanning",
+                "elapsed": round(time.time() - hb_started, 1),
+            })
+
+    hb = threading.Thread(target=heartbeat, daemon=True)
+    hb.start()
+
     prune_inspections()
     args = [YTDLP, "--dump-single-json", "--no-warnings", "--no-playlist", "--skip-download", url]
     try:
@@ -257,27 +273,42 @@ def inspect_url(url):
             creationflags=CREATE_NO_WINDOW,
         )
     except subprocess.TimeoutExpired:
+        stop_hb.set()
+        broadcast("inspect", {"url": url, "phase": "error"})
         return None, error_payload("INSPECTION_TIMEOUT", "The source took too long to respond. Try again.", True, "retry")
     except OSError as e:
+        stop_hb.set()
+        broadcast("inspect", {"url": url, "phase": "error"})
         if getattr(e, "winerror", None) in (193, 216):
             return None, error_payload("ENGINE_BROKEN", "yt-dlp looks broken. Run Kaze.bat option 1 to repair it.", True, "repair")
         return None, error_payload("INSPECTION_FAILED", str(e), True, "retry")
+    stop_hb.set()
     if proc.returncode != 0:
         raw = (proc.stderr or proc.stdout or "").strip()
         msg = friendly_error(raw)
         if msg:
             code = "AUTH_REQUIRED" if "sign-in" in msg or "sign in" in msg else "VIDEO_UNAVAILABLE"
+            broadcast("inspect", {"url": url, "phase": "error"})
             return None, error_payload(code, msg, False, "edit_url")
+        broadcast("inspect", {"url": url, "phase": "error"})
         return None, error_payload("INSPECTION_FAILED", "The source could not be inspected. Check the link and try again.", True, "retry")
     try:
         info = json.loads(proc.stdout)
     except json.JSONDecodeError:
+        broadcast("inspect", {"url": url, "phase": "error"})
         return None, error_payload("INSPECTION_FAILED", "The source returned unreadable metadata.", True, "retry")
     normalized = normalize_inspection(info, url)
     inspection_id = uuid.uuid4().hex[:16]
     with lock:
         inspections[inspection_id] = {"createdAt": time.time(), "data": normalized}
     normalized["inspectionId"] = inspection_id
+    broadcast("inspect", {
+        "url": url,
+        "phase": "done",
+        "title": normalized.get("title"),
+        "formats": len(normalized.get("formats") or []),
+        "isPlaylist": normalized.get("isPlaylist"),
+    })
     return normalized, None
 
 
@@ -773,8 +804,10 @@ def main():
 
 
 def _swallow_connection_errors(srv, handler):
-    exc_type = sys.exc_info()[0]
-    if exc_type in (BrokenPipeError, ConnectionResetError, TimeoutError):
+    exc = sys.exc_info()[1]
+    if isinstance(exc, (BrokenPipeError, ConnectionResetError, TimeoutError)):
+        return
+    if isinstance(exc, OSError) and getattr(exc, "winerror", None) in (10053, 10054, 995, 1236):
         return
     log.exception("request error")
 

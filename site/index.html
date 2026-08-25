@@ -3,19 +3,33 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kaze — grab any video, your way</title>
+<title>Kaze — see the formats. Then grab.</title>
 <meta name="description" content="Kaze inspects a link, shows the real formats available, and downloads to your PC through your own local server. YouTube, Dailymotion and hundreds more sites.">
-<meta name="theme-color" content="#0c0d11">
+<meta name="theme-color" content="#0a0b0f">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%238b7cf8'/%3E%3Cpath d='M15 27h21a6 6 0 1 0-6-6M13 37h29a6 6 0 1 1-6 6M19 46h11' stroke='%23fff' stroke-width='4.5' stroke-linecap='round' fill='none'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+
+<div class="bg" aria-hidden="true">
+  <div class="aurora a1"></div>
+  <div class="aurora a2"></div>
+  <div class="aurora a3"></div>
+  <div class="wind w1"></div>
+  <div class="wind w2"></div>
+  <div class="wind w3"></div>
+  <div class="wind w4"></div>
+  <div class="wind w5"></div>
+</div>
 
 <header class="topbar">
   <div class="bar-inner wrap">
     <div class="brand">
       <span class="logo" aria-hidden="true">
-        <svg viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#8b7cf8"/><path d="M15 27h21a6 6 0 1 0-6-6M13 37h29a6 6 0 1 1-6 6M19 46h11" stroke="#fff" stroke-width="4.5" stroke-linecap="round" fill="none"/></svg>
+        <svg viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="url(#lg)"/><path d="M15 27h21a6 6 0 1 0-6-6M13 37h29a6 6 0 1 1-6 6M19 46h11" stroke="#fff" stroke-width="4.5" stroke-linecap="round" fill="none"/><defs><linearGradient id="lg" x1="0" y1="0" x2="64" y2="64"><stop offset="0" stop-color="#8b7cf8"/><stop offset="1" stop-color="#4cc3f0"/></linearGradient></defs></svg>
       </span>
       <span class="brand-text">
         <span class="brand-name">Kaze</span>
@@ -32,16 +46,42 @@
 <main class="wrap">
 
   <section class="hero" id="connect-hero">
-    <h1>See the formats.<br>Then grab.</h1>
-    <p class="lede">Paste a link and Kaze inspects it first — real resolutions, real sizes, no surprises. Downloads run on your own PC through your Kaze Server.</p>
-    <div class="hero-cta">
-      <button class="btn btn-primary btn-big" id="btn-check" type="button">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-        Check my PC
-      </button>
-      <button class="btn btn-ghost btn-big" id="btn-download-zip" type="button">Download server (.zip)</button>
+    <div class="hero-grid">
+      <div class="hero-main">
+        <span class="eyebrow">LOCAL-FIRST DOWNLOADER</span>
+        <h1>See the formats.<br><span class="grad">Then grab.</span></h1>
+        <p class="lede">Paste a link and Kaze inspects it first — real resolutions, real sizes, no surprises. Downloads run on your own PC through your Kaze Server.</p>
+        <div class="hero-cta">
+          <button class="btn btn-primary btn-big" id="btn-check" type="button">
+            <svg class="spin-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            <span>Check my PC</span>
+          </button>
+          <button class="btn btn-ghost btn-big" id="btn-download-zip" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0 4.5-4.5M12 15l-4.5-4.5M4 19h16"/></svg>
+            Download server (.zip)
+          </button>
+        </div>
+        <p class="hint-line" id="hint-line">First time? <button class="linklike" id="btn-how" type="button">How it works</button></p>
+      </div>
+
+      <div class="hero-side">
+        <div class="sys-card" id="sys-card">
+          <div class="sys-head">
+            <span class="sys-title"><span class="pulse-dot"></span> System status</span>
+            <span class="sys-badge" id="sys-badge">Offline</span>
+          </div>
+          <div class="sys-rows">
+            <div class="sys-row"><span>Server</span><b id="sys-ver">Not detected</b></div>
+            <div class="sys-row"><span>Engine</span><b id="sys-engine">yt-dlp</b></div>
+            <div class="sys-row"><span>Save folder</span><b class="sys-dir" id="sys-dir">Downloads\KazeVideos</b></div>
+          </div>
+          <div class="sys-caps" id="sys-caps">
+            <span>inspect</span><span>formats</span><span>audio</span><span>subtitles</span><span>playlists</span><span>sponsor skip</span>
+          </div>
+          <div class="sys-foot">All of it runs on <b>your</b> machine.</div>
+        </div>
+      </div>
     </div>
-    <p class="hint-line" id="hint-line">First time? <button class="linklike" id="btn-how" type="button">How it works</button></p>
   </section>
 
   <section class="workspace hidden" id="workspace" aria-live="polite">
@@ -53,11 +93,34 @@
           <svg class="url-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
           <input type="url" id="url-input" placeholder="Paste a link — youtube.com, dailymotion.com, ..." spellcheck="false" autocomplete="off">
         </div>
-        <button class="btn btn-primary" id="btn-inspect" type="button">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
-          Inspect link
+        <button class="btn btn-primary btn-inspect" id="btn-inspect" type="button">
+          <svg class="inspect-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
+          <span id="inspect-btn-label">Inspect link</span>
         </button>
       </div>
+
+      <div class="inspect-progress hidden" id="inspect-progress">
+        <div class="scan-card">
+          <div class="scan-head">
+            <span class="scan-orb"><span></span></span>
+            <div class="scan-txt">
+              <div class="scan-title" id="scan-title">Inspecting link</div>
+              <div class="scan-sub" id="scan-sub">Contacting the source…</div>
+            </div>
+            <span class="scan-timer" id="scan-timer">0s</span>
+          </div>
+          <div class="scan-track">
+            <div class="scan-fill" id="scan-fill"></div>
+            <div class="scan-beam" id="scan-beam"></div>
+          </div>
+          <div class="scan-stages" id="scan-stages">
+            <span class="st active" data-st="0">Contact</span>
+            <span class="st" data-st="1">Metadata</span>
+            <span class="st" data-st="2">Formats</span>
+          </div>
+        </div>
+      </div>
+
       <p class="composer-note" id="composer-note" role="status"></p>
     </div>
 
@@ -72,15 +135,18 @@
       </div>
 
       <div class="choose" id="choose-zone">
-        <div class="seg" id="mode-seg" role="group" aria-label="Download type">
-          <button class="seg-btn active" data-mode="video" type="button">Video</button>
-          <button class="seg-btn" data-mode="audio" type="button">Audio</button>
+        <div class="choose-top">
+          <div class="seg" id="mode-seg" role="group" aria-label="Download type">
+            <button class="seg-btn active" data-mode="video" type="button">Video</button>
+            <button class="seg-btn" data-mode="audio" type="button">Audio</button>
+          </div>
+          <span class="res-count" id="res-count"></span>
         </div>
 
         <div class="format-zone" id="format-zone">
-          <h3 class="zone-label" id="format-label">Choose a video format</h3>
+          <h3 class="zone-label" id="format-label">Choose a format</h3>
           <p class="zone-hint" id="format-hint"></p>
-          <div class="format-grid" id="format-grid"></div>
+          <div class="pill-cloud" id="format-grid"></div>
         </div>
 
         <div class="options">
@@ -102,27 +168,23 @@
 
         <div class="download-row">
           <div class="est" id="est-text"></div>
-          <button class="btn btn-primary btn-big" id="btn-download" type="button">
+          <button class="btn btn-primary btn-big btn-dl" id="btn-download" type="button">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0 4.5-4.5M12 15l-4.5-4.5M4 19h16"/></svg>
-            Download
+            <span>Download</span>
           </button>
         </div>
         <p class="download-note" id="download-note" role="status"></p>
       </div>
     </section>
 
-    <div class="grid-2">
-      <section class="card">
+    <section class="card queue-card">
+      <div class="queue-head">
         <h2 class="card-title">Queue <span class="count" id="queue-count">0</span></h2>
-        <ul class="list" id="queue-list"></ul>
-        <p class="empty hidden" id="queue-empty">Nothing grabbing yet. Inspect a link above.</p>
-      </section>
-      <section class="card">
-        <h2 class="card-title">History <span class="count" id="history-count">0</span></h2>
-        <ul class="list" id="history-list"></ul>
-        <p class="empty hidden" id="history-empty">Finished grabs land here.</p>
-      </section>
-    </div>
+        <button class="btn btn-ghost btn-xs" id="btn-clear-queue" type="button">Clear finished</button>
+      </div>
+      <ul class="list" id="queue-list"></ul>
+      <p class="empty hidden" id="queue-empty">Nothing grabbing yet. Inspect a link above.</p>
+    </section>
 
     <p class="dash-foot">Files are saved to <code id="dl-dir">your Downloads\KazeVideos folder</code>.</p>
   </section>
