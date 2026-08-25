@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kaze - a media platform that runs on your PC</title>
+<meta name="description" content="Kaze is a local-first download platform. The Anime extension inspects real sources before you commit; the Video grabber shows real formats before anything downloads. Nothing leaves your PC.">
+<meta name="theme-color" content="#0c0d11">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%238b7cf8'/%3E%3Cpath d='M15 27h21a6 6 0 1 0-6-6M13 37h29a6 6 0 1 1-6 6M19 46h11' stroke='%23fff' stroke-width='4.5' stroke-linecap='round' fill='none'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="bar-inner wrap">
+    <a class="brand" href="#top" aria-label="Kaze home">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#8b7cf8"/><path d="M15 27h21a6 6 0 1 0-6-6M13 37h29a6 6 0 1 1-6 6M19 46h11" stroke="#fff" stroke-width="4.5" stroke-linecap="round" fill="none"/></svg>
+      </span>
+      <span class="brand-text">
+        <span class="brand-name">Kaze</span>
+        <span class="brand-sub">runs on your PC</span>
+      </span>
+    </a>
+    <nav class="nav" aria-label="Primary">
+      <a href="#anime">Anime</a>
+      <a href="#video">Video</a>
+      <a href="#how">How it works</a>
+      <a href="#setup">Setup</a>
+      <a href="#help">Help</a>
+    </nav>
+    <a class="btn btn-primary" href="#products">Get started</a>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero wrap">
+    <h1>See what you get. Then grab it.</h1>
+    <p class="lede">Kaze is a local-first download platform. Both tools inspect first and download second - so you choose real formats, not guesses. All of it runs on your own PC.</p>
+    <div class="hero-cta">
+      <a class="btn btn-primary btn-big" href="#products">Pick your tool</a>
+      <a class="btn btn-ghost btn-big" href="#how">How it works</a>
+    </div>
+  </section>
+
+  <section class="wrap section" id="products" aria-label="Kaze products">
+
+    <article class="product-row" id="anime">
+      <div class="product-copy">
+        <span class="product-tag">Chrome extension</span>
+        <h2>Anime downloader</h2>
+        <p>Search, pick your episodes, then inspect what each release really offers. Verified qualities, fansub groups, SUB or DUB - all before a single file starts.</p>
+        <ul class="feature-list">
+          <li>Episode-first source inspection</li>
+          <li>Verified and sampled availability states</li>
+          <li>Batch downloads into any folder</li>
+          <li>Self-healing against site changes</li>
+        </ul>
+        <a class="btn btn-ghost" href="#setup-anime">Set up the extension</a>
+      </div>
+      <div class="app-window" role="img" aria-label="Preview of the anime downloader">
+        <div class="win-bar"><span></span><span></span><span></span><em>Kaze - Anime</em></div>
+        <div class="win-body">
+          <div class="win-row search"><input value="Frieren" readonly><span class="key">Enter</span></div>
+          <div class="win-row result">
+            <div class="r-title">Frieren: Beyond Journey's End</div>
+            <div class="r-chips"><span>TV</span><span>28 eps</span><span>9.0</span></div>
+          </div>
+          <div class="win-row step"><span class="stepnum">1</span> Episodes <span class="eps">1 - 5</span></div>
+          <div class="win-row step"><span class="stepnum">2</span> Sources
+            <span class="pill-src ok">SUB</span>
+          </div>
+          <div class="src">
+            <span class="sq">1080p</span>
+            <span class="sg">SubsPlease</span>
+            <span class="sright"><span class="ssize">1400 MB/ep</span><span class="sstate ok">available</span></span>
+          </div>
+          <div class="src">
+            <span class="sq">720p</span>
+            <span class="sg">SubsPlease</span>
+            <span class="sright"><span class="ssize">700 MB/ep</span><span class="sstate warn">1/3 sampled</span></span>
+          </div>
+          <div class="win-row est">About 6.8 GB for 5 episodes</div>
+          <div class="win-row cta-row"><button class="mock-cta" disabled>Choose a folder to start</button></div>
+        </div>
+      </div>
+    </article>
+
+    <article class="product-row flip" id="video">
+      <div class="product-copy">
+        <span class="product-tag">Web app + local server</span>
+        <h2>Video grabber</h2>
+        <p>Paste a link and inspect it first. Real resolutions, real codecs, real sizes. Pick an exact format or grab audio, subtitles and playlists - downloaded straight to your disk.</p>
+        <ul class="feature-list">
+          <li>Inspect before you download</li>
+          <li>Actual format cards from the source</li>
+          <li>Audio-only, subtitles, SponsorBlock</li>
+          <li>YouTube, Dailymotion, and hundreds more</li>
+        </ul>
+        <a class="btn btn-ghost" href="#setup-video">Set up the video grabber</a>
+      </div>
+      <div class="app-window" role="img" aria-label="Preview of the video grabber">
+        <div class="win-bar"><span></span><span></span><span></span><em>Kaze - Video</em></div>
+        <div class="win-body">
+          <div class="win-row search"><input value="https://www.youtube.com/watch?v=..." readonly><span class="key">Inspect</span></div>
+          <div class="win-row thumb"><span class="tb"></span>
+            <div class="tinfo">
+              <div class="r-title">Never Gonna Give You Up</div>
+              <div class="r-chips"><span>3:33</span><span>4K</span><span>42 formats</span></div>
+            </div>
+          </div>
+          <div class="win-row step"><span class="stepnum">2</span> Choose a format</div>
+          <div class="fmt-grid">
+            <div class="fmt sel"><span class="fq">1080p MP4</span><span class="fs">avc1 - 81 MB</span></div>
+            <div class="fmt"><span class="fq">720p MP4</span><span class="fs">avc1 - 41 MB</span></div>
+            <div class="fmt"><span class="fq">M4A</span><span class="fs">128 kbps - 3 MB</span></div>
+          </div>
+          <div class="win-row bar"><div class="bar-fill" style="width:64%"></div></div>
+          <div class="win-row est">64% - 12.4 MB/s - 0:14 left</div>
+        </div>
+      </div>
+    </article>
+
+  </section>
+
+  <section class="wrap section" id="how" aria-label="How it works">
+    <h2 class="section-head">One idea, both tools</h2>
+    <div class="how-grid">
+      <div class="how">
+        <h3>Inspect</h3>
+        <p>Kaze reads the source first - episodes and release groups for anime, formats and sizes for video.</p>
+      </div>
+      <div class="how">
+        <h3>Choose</h3>
+        <p>You pick from what actually exists, not a fixed dropdown that guesses.</p>
+      </div>
+      <div class="how">
+        <h3>Download</h3>
+        <p>Files land in a folder you choose, straight from your connection. Nothing passes through a Kaze server.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap section" id="setup" aria-label="Setup">
+    <h2 class="section-head">Setup</h2>
+    <div class="setup-grid">
+      <div class="setup" id="setup-video">
+        <h3>Video grabber</h3>
+        <ol>
+          <li>Open <a href="https://kaze-downloader.vercel.app" target="_blank" rel="noopener">kaze-downloader.vercel.app</a></li>
+          <li>Download the server zip and unzip it anywhere</li>
+          <li>Run <kbd>Kaze.bat</kbd>, pick <kbd>1</kbd>, wait for DONE</li>
+          <li>Pick <kbd>3</kbd> for auto-start (recommended), or <kbd>2</kbd> to start now</li>
+          <li>Hit Check my PC on the site and paste a link</li>
+        </ol>
+      </div>
+      <div class="setup" id="setup-anime">
+        <h3>Anime extension</h3>
+        <ol>
+          <li>Open <code>chrome://extensions</code> and turn on Developer mode</li>
+          <li>Load unpacked, choose the Kaze extension folder</li>
+          <li>Click the Kaze icon to open the full-page app</li>
+          <li>Search, pick episodes, inspect sources, choose a folder</li>
+          <li>Download - your files are saved locally</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap section" id="help" aria-label="Help">
+    <h2 class="section-head">Help</h2>
+    <div class="help-grid">
+      <div class="help">
+        <h3>Something broke</h3>
+        <p>Sources change often. For the video grabber, run <kbd>Kaze.bat</kbd> and pick <kbd>1</kbd> - it re-downloads the latest engine and repairs components.</p>
+      </div>
+      <div class="help">
+        <h3>Where do files go?</h3>
+        <p>Video lands in <code>Downloads\KazeVideos</code>. Anime goes into whichever folder you picked when you started the job.</p>
+      </div>
+      <div class="help">
+        <h3>Is it private?</h3>
+        <p>Yes. Both tools download directly from your connection to your disk. The website is only the remote control for the local server.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot wrap">
+  <span>Kaze - local-first download platform.</span>
+  <span class="foot-links">
+    <a href="https://kaze-downloader.vercel.app" target="_blank" rel="noopener">Video grabber</a>
+    <a href="https://github.com/jatauabdullah-maker/kaze-web" target="_blank" rel="noopener">Source</a>
+  </span>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
