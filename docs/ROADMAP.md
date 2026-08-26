@@ -2,21 +2,21 @@
 
 ## Completed
 
-- Local Kaze Server with a Vercel control surface
-- Portable runtime and engine bootstrap
-- Local queue, progress events, history, and repair flow
-- Versioned platform contract and capability model
-- Video server protocol 2: `/inspect`, real format metadata, typed errors, format validation
-- Video UI: Connect, Inspect, Choose format, Configure, Download
-- Anime extension source-adapter layer (`sources/animepahe.js`, `sources/registry.js`) with episode-first source inspection and verified/partial/unverified states (lives in `../kaze-downloader`, v2.2.0)
-- Unified Kaze showcase at kaze-media-hub.vercel.app presenting both products with shared design tokens
+- **Local Kaze Server** with a Vercel control surface (`server/`).
+- **Portable runtime + engine bootstrap** (`Kaze.bat`: python + yt-dlp + ffmpeg, verified PE checks).
+- **Video protocol 2** — `/inspect` returns real format metadata; typed errors; format validation.
+- **Video UI** — Connect → Inspect (animated wind-scanner with SSE heartbeats) → choose format pills → download with smooth in-place queue bars + "Processing with FFmpeg…" state.
+- **Anime extension** (`../kaze-downloader`, v2.2.0) — source-adapter layer with episode-first inspection, verified/partial/unverified states, self-healing work tabs.
+- **Kaze Hub** — unified showcase at `kaze-media-hub.vercel.app` presenting both products.
+- **Family design system** — shared aurora/wind background, tokens, type, and motion across all three surfaces.
+- **Reliable startup** — bat uses direct `start` + curl-ping polling wait; no more "server did not start".
 
 ## Next
 
-1. Move user data outside replaceable server files and add capability/version checks in the bat/site update path.
+1. Move user data fully outside replaceable server files and add capability/version checks in the update path.
 2. Wire poster thumbnails into the anime source adapter when a provider supports them.
 3. Final cross-site QA pass (desktop + mobile) and encoding scan.
 
 ## Acceptance Rule
 
-Every new source or Kaze product must be addable by implementing a module adapter and capability document. Existing shared UI and queue behavior should not require provider-specific branches.
+Every new source or Kaze product must be addable by implementing a module adapter + capability document. Existing shared UI and queue behavior should not require provider-specific branches.

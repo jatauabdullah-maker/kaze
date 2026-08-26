@@ -1,36 +1,32 @@
 # Kaze Platform Contract
 
-Kaze is a product family, not a single downloader. Product surfaces must depend on shared contracts and capabilities rather than provider-specific UI assumptions.
+Kaze is a product family, not a single downloader. All surfaces share one workflow idea and one visual language. This contract keeps them coherent so any agent can build on or maintain any surface.
 
 ## Product Modules
 
 | Module | Surface | Primary workflow |
 |---|---|---|
-| `showcase` | Public web | Discover Kaze products, setup, help |
-| `anime` | Chrome extension | Search, choose episodes, inspect sources, download |
-| `video` | Vercel UI + local server | Connect, inspect URL, choose format, download |
+| `hub` | Public web (showcase) | Discover Kaze products, setup, help |
+| `anime` | Chrome extension (`../kaze-downloader`) | Search, choose episodes, inspect sources, download |
+| `video` | Vercel UI + local server (this repo `site/` + `server/`) | Connect, inspect URL, choose format, download |
 
-Each module owns its domain behavior. Shared UI owns navigation, status, settings, history, errors, and update messaging.
-
-## Stable Workflow Contracts
-
-The shared workflow vocabulary is:
+## Shared Workflow
 
 ```text
 connect -> inspect -> configure -> download -> history
 ```
 
-Anime uses a provider-specific prefix before the common configuration flow:
+Anime adds a provider prefix:
 
 ```text
 search -> select title -> select episodes -> inspect sources -> configure -> download
 ```
 
-Providers may add capabilities, but they must not change the meaning of these stages.
+Providers may add capabilities but must not change the meaning of these stages.
 
 ## Capability Model
 
-Every provider or local-server implementation should expose capabilities. The UI renders only controls supported by the active capability set.
+Providers expose capabilities; the UI renders only what's supported.
 
 ```json
 {
@@ -38,80 +34,45 @@ Every provider or local-server implementation should expose capabilities. The UI
   "provider": "yt-dlp",
   "protocol": 2,
   "capabilities": {
-    "inspect": true,
-    "formats": true,
-    "audio": true,
-    "subtitles": true,
-    "thumbnails": true,
-    "metadata": true,
-    "playlists": true,
-    "sponsorblock": true,
-    "history": true,
-    "updates": true
+    "inspect": true, "formats": true, "audio": true, "subtitles": true,
+    "thumbnails": true, "metadata": true, "playlists": true,
+    "sponsorblock": true, "history": true, "updates": true
   }
 }
 ```
 
-Anime source adapters use the same idea:
-
-```json
-{
-  "provider": "animepahe",
-  "capabilities": {
-    "search": true,
-    "episodes": true,
-    "sourceInspection": true,
-    "quality": true,
-    "fansubGroups": true,
-    "dub": true,
-    "subtitles": true
-  }
-}
-```
+Anime adapters use the same idea (`search`, `episodes`, `sourceInspection`, `quality`, `fansubGroups`, `dub`, `subtitles`).
 
 ## Versioning Rules
 
-- `protocol` is an integer and changes only when a request or response contract changes.
-- Additive response fields are backward-compatible.
-- Removing or changing the meaning of a field requires a protocol increment.
+- `protocol` is an integer; changes only when a request/response contract changes.
+- Additive fields are backward-compatible.
 - The client must check `protocol` and capabilities before enabling actions.
-- The server must return typed errors, not provider-specific terminal output.
-- User data such as history, settings, and logs must live outside replaceable application binaries.
+- The server must return typed errors, not provider terminal output.
+- User data (history, settings, logs) lives outside replaceable binaries.
 
 ## Error Contract
-
-All product APIs should use this shape:
 
 ```json
 {
   "ok": false,
-  "error": {
-    "code": "VIDEO_UNAVAILABLE",
-    "message": "This video is unavailable or removed.",
-    "retryable": false,
-    "action": "edit_url"
-  }
+  "error": { "code": "VIDEO_UNAVAILABLE", "message": "This video is unavailable or removed.", "retryable": false, "action": "edit_url" }
 }
 ```
 
-Recommended codes include `INVALID_URL`, `UNSUPPORTED_SOURCE`, `AUTH_REQUIRED`, `VIDEO_UNAVAILABLE`, `RATE_LIMITED`, `INSPECTION_TIMEOUT`, `FORMAT_UNAVAILABLE`, `SERVER_OFFLINE`, `PROTOCOL_MISMATCH`, and `ENGINE_UPDATE_REQUIRED`.
+Recommended codes: `INVALID_URL`, `UNSUPPORTED_SOURCE`, `AUTH_REQUIRED`, `VIDEO_UNAVAILABLE`, `RATE_LIMITED`, `INSPECTION_TIMEOUT`, `FORMAT_UNAVAILABLE`, `SERVER_OFFLINE`, `PROTOCOL_MISMATCH`, `ENGINE_UPDATE_REQUIRED`.
 
-## Source Adapter Boundary
+## Design Contract (shared family look)
 
-An anime provider adapter should expose normalized operations:
-
-```text
-search(query)
-getEpisodes(titleId)
-inspectSources(episodes)
-resolveDownload(source, episode)
-```
-
-The adapter may use AnimePahe-specific selectors, cookies, or challenge handling internally. Those details must not leak into the UI or shared queue.
+- Dark `#0a0b0f`; surface `#14161f`; text `#eceef4`; muted `#9aa1b1`.
+- Accent gradient `#8b7cf8 → #4cc3f0`; success `#3fd68a`; warn `#f0b64f`; error `#f27474`.
+- Animated aurora blobs + wind streaks on a fixed `.bg` layer.
+- Space Grotesk display + Inter body (system fallbacks in the extension).
+- Motion eases `cubic-bezier(.22,1,.36,1)`; respect `prefers-reduced-motion`.
 
 ## Upgrade Boundary
 
-The local server package is replaceable. The following data must survive upgrades:
+The local server package is replaceable. These must survive upgrades:
 
 ```text
 user-data/history.json
@@ -121,4 +82,4 @@ runtime/
 bin/
 ```
 
-An update may replace server code and download engines, but it must not delete user data. The UI should display the installed server protocol, version, and capabilities before offering downloads.
+An update may replace server code and engines but must never delete user data.
