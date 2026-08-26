@@ -731,8 +731,8 @@ const STEPS = `
     <p>Installs everything, one time, and updates yt-dlp. Wait for the DONE box.</p>
   </div></div>
   <div class="step-card"><div class="step-num">4</div><div class="step-body">
-    <h3>Pick <kbd>3</kbd> for auto-start, or <kbd>2</kbd> to start now</h3>
-    <p>Auto-start keeps Kaze ready whenever you log into Windows.</p>
+    <h3>Pick <kbd>2</kbd> to start the server now</h3>
+    <p>Or run <kbd>Kaze.bat</kbd> 5 for silent auto-start with Windows.</p>
   </div></div>
   <div class="step-card"><div class="step-num">5</div><div class="step-body">
     <h3>Come back and hit Check my PC</h3>
@@ -750,7 +750,11 @@ function wizard(title, sub) {
     </div>`);
   $("modal-zip").addEventListener("click", () => {
     toast("Opening the Kaze Server download…");
-    window.open(ZIP_URL, "_blank", "noopener");
+    const a = document.createElement("a");
+    a.href = ZIP_URL;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.click();
   });
   $("modal-recheck").addEventListener("click", async () => {
     const info = await ping(3000);
@@ -766,8 +770,7 @@ function controlsModal() {
     <p class="sub">Everything lives in the menu on <b>Kaze.bat</b>, right where you unzipped it:</p>
     <div class="step-card"><div class="step-body"><h3><kbd>1</kbd> Initialize / Repair</h3><p>First-time install and the fix-all: updates yt-dlp when a source changes.</p></div></div>
     <div class="step-card"><div class="step-body"><h3><kbd>2</kbd> Start server now</h3><p>Turns Kaze on for this session.</p></div></div>
-    <div class="step-card"><div class="step-body"><h3><kbd>3</kbd> Auto-start ON</h3><p>Kaze starts silently with Windows. Recommended.</p></div></div>
-    <div class="step-card"><div class="step-body"><h3><kbd>4</kbd> Turn OFF</h3><p>Stops the server and removes auto-start.</p></div></div>
+    <div class="step-card"><div class="step-body"><h3><kbd>3</kbd> Turn OFF</h3><p>Stops the server.</p></div></div>
     <div class="modal-actions"><button class="btn btn-primary" data-close>Got it</button></div>`);
 }
 
@@ -776,7 +779,7 @@ function connectOkBanner(info) {
   zone.className = "card";
   zone.innerHTML = `
     <div class="ok-banner">${ICONS.check} Server detected — connected to your own PC</div>
-    <p class="dash-foot" style="margin:0 0 10px">Server v${esc(info.version)}. Want Kaze always ready? Run <b>Kaze.bat</b> and pick <b>3</b> once. To shut it down: <b>4</b>.</p>`;
+    <p class="dash-foot" style="margin:0 0 10px">Server v${esc(info.version)}. To shut it down: run <b>Kaze.bat</b> and pick <b>3</b>.</p>`;
   els.workspace.prepend(zone);
   setTimeout(() => {
     zone.style.transition = "opacity .4s ease, transform .4s ease";

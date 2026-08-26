@@ -23,17 +23,15 @@ echo   ============================================
 echo.
 echo    1. Initialize / Repair  ^(install or update everything^)
 echo    2. Start server now
-echo    3. Auto-start ON  ^(always available, starts with Windows^)
-echo    4. Turn OFF       ^(stop server + remove auto-start^)
-echo    5. Exit
+echo    3. Turn OFF       ^(stop server^)
+echo    4. Exit
 echo.
 set /p CHOICE=  Select option: 
 
 if "%CHOICE%"=="1" goto init
 if "%CHOICE%"=="2" goto startnow
-if "%CHOICE%"=="3" goto autostart
-if "%CHOICE%"=="4" goto turnoff
-if "%CHOICE%"=="5" exit /b 0
+if "%CHOICE%"=="3" goto turnoff
+if "%CHOICE%"=="4" exit /b 0
 goto menu
 
 :validpe
@@ -141,24 +139,10 @@ call :validpe "%YTDLP%" || exit /b 1
 start "KazeServer" /min "%PY%" server.py
 exit /b 0
 
-:autostart
-schtasks /Create /TN "KazeServer" /TR "\"%~f0\" 5" /SC ONLOGON /RL LIMITED /F >nul 2>&1
-if errorlevel 1 (
-    echo   Could not create the auto-start task.
-) else (
-    call :stopproc
-    start "KazeServer" /min "%PY%" server.py
-    echo   Auto-start enabled. Server is running now and will
-    echo   always be available when you log into Windows.
-)
-timeout /t 3 /nobreak >nul
-goto menu
-
 :turnoff
 call :stopproc
-schtasks /Delete /TN "KazeServer" /F >nul 2>&1
-echo   Server stopped. Auto-start removed.
-timeout /t 3 /nobreak >nul
+echo   Server stopped.
+timeout /t 2 /nobreak >nul
 goto menu
 
 :stopproc
