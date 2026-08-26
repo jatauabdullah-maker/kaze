@@ -649,24 +649,52 @@ function updateItem(li, j) {
   const processing = j.status === "running" && (stalled || j.percent >= 99.6);
   const connecting = j.status === "running" && !j.downloaded && j.percent <= 0 && now - rec.last > 1500;
 
+  const prevStatus = li.dataset.status;
+  const statusChanged = prevStatus !== j.status;
+  li.dataset.status = j.status;
+
   li.classList.toggle("processing", processing);
   li.classList.toggle("done", j.status === "done");
   li.classList.toggle("queued", j.status === "queued");
   li.classList.toggle("error", j.status === "error");
 
+  // Build structure only once (or when status changes)
+  if (!li.querySelector(".bar") || statusChanged) {
+    li.innerHTML = `
+      <div class="item-top">
+        <span class="item-title"></span>
+        <span class="item-right" style="display:inline-flex;gap:8px;align-items:center"></span>
+      </div>
+      <div class="item-meta"></div>
+      <div class="bar"><div></div></div>
+      <div class="bar-ind"><span></span><span class="dots"><i></i><i></i><i></i></span></div>
+      <div class="err-wrap"></div>`;
+  }
+
+  li.querySelector(".item-title").textContent = j.title || j.url;
+
+  const right = li.querySelector(".item-right");
   const cancel = j.status === "running" || j.status === "queued"
     ? `<button class="icon-btn" data-cancel="${esc(j.id)}" title="Cancel">${ICONS.close}</button>`
     : "";
+  const badgeHtml = `${badge(j.status)}${cancel}`;
+  if (right.innerHTML !== badgeHtml) right.innerHTML = badgeHtml;
 
-  li.innerHTML = `
-    <div class="item-top">
-      <span class="item-title">${esc(j.title || j.url)}</span>
-      <span style="display:inline-flex;gap:8px;align-items:center">${badge(j.status)}${cancel}</span>
-    </div>
-    <div class="item-meta">${jobMeta(j)}</div>
-    <div class="bar"><div style="width:${Math.max(2, Math.min(100, j.percent))}%"></div></div>
-    <div class="bar-ind"><span>${processing ? "Processing with FFmpeg…" : connecting ? "Connecting…" : "Working…"}</span><span class="dots"><i></i><i></i><i></i></span></div>
-    ${j.status === "error" ? `<div class="err-msg">${esc(j.error)}</div><span class="repair-chip" data-repair>Fix: Kaze.bat option 1</span>` : ""}`;
+  li.querySelector(".item-meta").innerHTML = jobMeta(j);
+
+  // Update bar width in place — persistent element => smooth transition, no blink
+  const barFill = li.querySelector(".bar > div");
+  const pct = Math.max(2, Math.min(100, j.percent));
+  barFill.style.width = `${pct}%`;
+
+  const barInd = li.querySelector(".bar-ind span");
+  barInd.textContent = processing ? "Processing with FFmpeg…" : connecting ? "Connecting…" : "Working…";
+
+  const errWrap = li.querySelector(".err-wrap");
+  const errHtml = j.status === "error"
+    ? `<div class="err-msg">${esc(j.error)}</div><span class="repair-chip" data-repair>Fix: Kaze.bat option 1</span>`
+    : "";
+  if (errWrap.innerHTML !== errHtml) errWrap.innerHTML = errHtml;
 }
 
 function renderQueue() {
