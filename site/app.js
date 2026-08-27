@@ -1,7 +1,7 @@
 "use strict";
 
 const API = "http://127.0.0.1:8619";
-const ZIP_URL = "https://github.com/jatauabdullah-maker/kaze-web/releases/latest/download/Kaze-Server.zip";
+const ZIP_URL = "https://github.com/jatauabdullah-maker/kaze/releases/latest/download/Kaze-Server.zip";
 const REQUIRED_PROTOCOL = 2;
 
 const $ = (id) => document.getElementById(id);

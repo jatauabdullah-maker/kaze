@@ -1,11 +1,25 @@
+# Python
 __pycache__/
+*.pyc
+
+# Downloaded at runtime by Kaze.bat - never commit binaries
 runtime/
 bin/
+
+# Local server state
 user-data/
 logs/
 history.json
 server.pid
 kaze-server.log
+
+# Generated shortcut (built by Kaze.bat, points at the tracked icon)
+Kaze Server.lnk
+
+# Release artifacts are built, not tracked
 *.zip
+
+# Tooling
 node_modules/
 .vercel
+.env*

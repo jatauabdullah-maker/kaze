@@ -10,11 +10,17 @@ set "FFPROBE=bin\ffprobe.exe"
 set "PYVER=3.12.8"
 set "PYURL=https://www.python.org/ftp/python/%PYVER%/python-%PYVER%-embed-amd64.zip"
 set "FFURL=https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+set "ICON=%~dp0kaze.ico"
+set "SHORTCUT=%~dp0Kaze Server.lnk"
+set "AUTOLNK=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Kaze Server.lnk"
 
 if "%~1"=="5" goto silentstart
 
+call :makeshortcut
+
 :menu
 cls
+call :autostate
 echo.
 echo   ============================================
 echo               K A Z E   S E R V E R
@@ -24,14 +30,16 @@ echo.
 echo    1. Initialize / Repair  ^(install or update everything^)
 echo    2. Start server now
 echo    3. Turn OFF       ^(stop server^)
-echo    4. Exit
+echo    4. Always-on: !AUTOSTATE!
+echo    5. Exit
 echo.
 set /p CHOICE=  Select option: 
 
 if "%CHOICE%"=="1" goto init
 if "%CHOICE%"=="2" goto startnow
 if "%CHOICE%"=="3" goto turnoff
-if "%CHOICE%"=="4" exit /b 0
+if "%CHOICE%"=="4" goto toggleauto
+if "%CHOICE%"=="5" exit /b 0
 goto menu
 
 :validpe
@@ -144,6 +152,75 @@ call :stopproc
 echo   Server stopped.
 timeout /t 2 /nobreak >nul
 goto menu
+
+:: ---------------------------------------------------------------
+:: Always-on: a shortcut in the user's Startup folder.
+::
+:: Scheduled Tasks would be tidier, but "schtasks /sc onlogon"
+:: requires elevation - it fails with "Access is denied" for a
+:: normal user, so it is not an option here. A Run-key entry needs
+:: no admin either, but AV heuristics flag those. The Startup
+:: shortcut needs no admin, is trivial for the user to inspect or
+:: delete by hand, and launches minimized via WindowStyle 7.
+:: ---------------------------------------------------------------
+:autostate
+if exist "%AUTOLNK%" set "AUTOSTATE=ON   - starts by itself when you log in"
+if not exist "%AUTOLNK%" set "AUTOSTATE=OFF  - starts only when you pick 2"
+exit /b 0
+
+:toggleauto
+if exist "%AUTOLNK%" goto autooff
+goto autoon
+
+:autoon
+call :validpe "%PY%" || goto needinit
+call :validpe "%YTDLP%" || goto needinit
+set "KZ_LNK=%AUTOLNK%"
+set "KZ_BAT=%~f0"
+set "KZ_DIR=%~dp0"
+set "KZ_ICO=%ICON%"
+powershell -NoProfile -Command "$w=New-Object -ComObject WScript.Shell;$s=$w.CreateShortcut($env:KZ_LNK);$s.TargetPath=$env:KZ_BAT;$s.Arguments='5';$s.WorkingDirectory=$env:KZ_DIR;if(Test-Path $env:KZ_ICO){$s.IconLocation=$env:KZ_ICO};$s.WindowStyle=7;$s.Description='Start Kaze Server at login';$s.Save()" >nul 2>&1
+if not exist "%AUTOLNK%" (
+    echo.
+    echo   Could not create the startup shortcut. Nothing was changed.
+    timeout /t 3 /nobreak >nul
+    goto menu
+)
+cls
+echo.
+echo   Always-on is now ON.
+echo.
+echo   Kaze starts by itself when you log in, so the site just
+echo   works without opening this window. Downloads still run
+echo   entirely on this PC - nothing is sent anywhere.
+echo.
+echo   Pick option 4 again to turn it back off.
+echo.
+pause
+goto menu
+
+:autooff
+del "%AUTOLNK%" >nul 2>&1
+cls
+echo.
+echo   Always-on is now OFF.
+echo   Kaze will not start at login any more. It keeps running for
+echo   this session - use option 3 to stop it now.
+echo.
+pause
+goto menu
+
+:: Build a shortcut next to the bat so the launcher carries the Kaze
+:: icon. A raw .bat cannot hold one; a .lnk pointing at it can.
+:makeshortcut
+if not exist "%ICON%" exit /b 0
+if exist "%SHORTCUT%" exit /b 0
+set "KZ_LNK=%SHORTCUT%"
+set "KZ_BAT=%~f0"
+set "KZ_DIR=%~dp0"
+set "KZ_ICO=%ICON%"
+powershell -NoProfile -Command "$w=New-Object -ComObject WScript.Shell;$s=$w.CreateShortcut($env:KZ_LNK);$s.TargetPath=$env:KZ_BAT;$s.WorkingDirectory=$env:KZ_DIR;$s.IconLocation=$env:KZ_ICO;$s.Description='Kaze Server - local companion for the Kaze video grabber';$s.Save()" >nul 2>&1
+exit /b 0
 
 :stopproc
 for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":8619" ^| findstr "LISTENING"') do taskkill /PID %%P /F >nul 2>&1

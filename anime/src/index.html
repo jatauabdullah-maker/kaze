@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Kaze Downloader</title>
+<link rel="stylesheet" href="styles.css" />
+<link rel="icon" href="../icons/icon48.png" />
+</head>
+<body>
+<canvas id="confetti"></canvas>
+
+<div class="bg" aria-hidden="true">
+  <div class="aurora a1"></div>
+  <div class="aurora a2"></div>
+  <div class="aurora a3"></div>
+  <div class="wind w1"></div>
+  <div class="wind w2"></div>
+  <div class="wind w3"></div>
+  <div class="wind w4"></div>
+  <div class="wind w5"></div>
+</div>
+
+<div class="shell">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="url(#lg)"/><path d="M15 27h21a6 6 0 1 0-6-6M13 37h29a6 6 0 1 1-6 6M19 46h11" stroke="#fff" stroke-width="4.5" stroke-linecap="round" fill="none"/><defs><linearGradient id="lg" x1="0" y1="0" x2="64" y2="64"><stop offset="0" stop-color="#8b7cf8"/><stop offset="1" stop-color="#4cc3f0"/></linearGradient></defs></svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-name">Kaze</span>
+        <span class="brand-sub">anime <b id="verText"></b></span>
+      </div>
+    </div>
+
+    <nav class="stepper" id="stepper">
+      <button class="step active" data-step="discover"><span class="dot"></span>Search</button>
+      <span class="bar"></span>
+      <button class="step" data-step="details"><span class="dot"></span>Configure</button>
+      <span class="bar"></span>
+      <button class="step" data-step="queue"><span class="dot"></span>Download</button>
+      <span class="bar"></span>
+      <button class="step" data-step="done"><span class="dot"></span>Finish</button>
+    </nav>
+
+    <div class="top-status" id="topStatus">
+      <span class="status-dot idle" id="statusDot"></span>
+      <span id="statusText">Idle</span>
+    </div>
+  </header>
+
+  <main class="stage">
+
+    <section class="screen active" id="screen-discover">
+      <div class="hero">
+        <h1>Download anime<br />with the sources in view.</h1>
+        <p>Pick a series and your episodes, then Kaze checks what each release actually offers before anything downloads. Source: <b id="sourceLabel">AnimePahe</b></p>
+      </div>
+
+      <form class="searchbar" id="searchForm">
+        <svg class="search-ico" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="m20 20-3.2-3.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <label class="sr-only" for="searchInput">Search an anime</label>
+        <input type="text" id="searchInput" placeholder="Search an anime, for example Frieren or Oshi no Ko" autocomplete="off" spellcheck="false" />
+        <kbd>Enter</kbd>
+      </form>
+
+      <div class="results-head" id="resultsHead" hidden><span id="resultsCount"></span></div>
+      <div class="grid" id="resultsGrid"></div>
+      <div class="statebox" id="discoverState" hidden></div>
+    </section>
+
+    <section class="screen" id="screen-details">
+      <button class="ghost-btn back" id="backToSearch" type="button">
+        <svg viewBox="0 0 24 24" fill="none" width="15" height="15"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Back to results
+      </button>
+
+      <div class="detail-hero glass">
+        <div class="detail-info">
+          <h2 id="dTitle">&nbsp;</h2>
+          <div class="chiprow" id="dChips"></div>
+        </div>
+      </div>
+
+      <div class="config glass">
+        <div class="cfg-row">
+          <label class="cfg-label">Step 1 - Episodes</label>
+          <div class="ep-range">
+            <label class="sr-only" for="epStart">First episode</label>
+            <input type="number" id="epStart" min="1" value="1" />
+            <span class="dash">to</span>
+            <label class="sr-only" for="epEnd">Last episode</label>
+            <input type="number" id="epEnd" min="1" value="1" />
+            <span class="total-pill" id="epTotal">0 eps</span>
+          </div>
+          <div class="quick-chips" id="quickChips">
+            <button data-q="all" type="button">All</button>
+            <button data-q="first5" type="button">First 5</button>
+            <button data-q="last5" type="button">Latest 5</button>
+          </div>
+          <p class="cfg-note" id="epSummary">No episodes selected</p>
+        </div>
+
+        <div class="cfg-row">
+          <label class="cfg-label">Step 2 - Sources</label>
+          <div class="inspect-row">
+            <button class="ghost-btn inspect" id="inspectBtn" type="button" disabled>
+              <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="m20 20-3.2-3.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              <span id="inspectLabel">Inspect sources</span>
+            </button>
+            <div class="seg" id="audioSeg">
+              <button class="active" data-audio="sub" type="button">SUB</button>
+              <button data-audio="dub" type="button">DUB</button>
+            </div>
+          </div>
+          <div class="source-list" id="sourceList"></div>
+          <p class="cfg-note" id="inspectSummary"></p>
+        </div>
+
+        <div class="cfg-row">
+          <label class="cfg-label">Step 3 - Save to</label>
+          <div class="folder-row">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" stroke="currentColor" stroke-width="1.8"/></svg>
+            <span class="folder-name" id="folderName">Choose a folder</span>
+            <button class="ghost-btn small" id="pickFolder" type="button">Browse</button>
+          </div>
+        </div>
+
+        <div class="start-row">
+          <button class="cta" id="startBtn" type="button" disabled>
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 4v11m0 0 4.5-4.5M12 15l-4.5-4.5M4 19h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Start download
+          </button>
+          <span class="est" id="estText"></span>
+        </div>
+        <p class="cfg-note warn-note" id="startHint"></p>
+      </div>
+    </section>
+
+    <section class="screen" id="screen-queue">
+      <button class="ghost-btn back" id="backToConfig" type="button">
+        <svg viewBox="0 0 24 24" fill="none" width="15" height="15"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Back to setup
+      </button>
+
+      <div class="queue-head glass">
+        <div class="qh-left">
+          <h3 id="qTitle">&nbsp;</h3>
+          <div class="qh-meta" id="qMeta"></div>
+        </div>
+        <div class="qh-right">
+          <div class="global-progress">
+            <div class="gp-num" id="gpNum">0%</div>
+            <div class="gp-track"><div class="gp-fill" id="gpFill"></div></div>
+          </div>
+          <button class="danger-btn" id="cancelBtn" type="button">Cancel</button>
+        </div>
+      </div>
+
+      <div class="queue-list" id="queueList"></div>
+
+      <details class="logbox">
+        <summary>Activity log</summary>
+        <pre id="logPre"></pre>
+      </details>
+    </section>
+
+    <section class="screen" id="screen-done">
+      <div class="done-card glass">
+        <div class="check-wrap"><svg class="check" viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M14 27l8 8 16-17"/></svg></div>
+        <h2>All done</h2>
+        <p id="doneSummary"></p>
+        <div class="path-row" id="donePathRow">
+          <code id="donePath"></code>
+          <button class="ghost-btn small" id="copyPath" type="button">Copy path</button>
+        </div>
+        <div class="done-actions">
+          <button class="cta" id="againBtn" type="button">Download more</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div class="toasts" id="toasts"></div>
+<div class="modal-root" id="modalRoot" hidden></div>
+
+<script src="js/util.js"></script>
+<script src="js/idb.js"></script>
+<script src="js/confetti.js"></script>
+<script src="js/pipeline.js"></script>
+<script src="js/sources/animepahe.js"></script>
+<script src="js/sources/registry.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

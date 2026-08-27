@@ -29,6 +29,11 @@ MAX_PARALLEL = 3
 SITE_URL = "https://kaze-downloader.vercel.app"
 INSPECTION_TTL = 15 * 60
 INSPECTION_TIMEOUT = 45
+MAX_INSPECTIONS = 200
+MAX_ACTIVE_JOBS = 40
+MAX_JOBS_KEPT = 300
+MAX_SSE_CLIENTS = 20
+SSE_QUEUE_MAX = 500
 
 QUALITIES = {"best", "2160", "1440", "1080", "720", "480", "360"}
 AUDIO_FORMATS = {"mp3", "m4a"}
@@ -92,7 +97,6 @@ def broadcast(event, data):
             if q in sse_clients:
                 sse_clients.remove(q)
 
-
 def job_public(j):
     return {
         "id": j["id"],
@@ -118,6 +122,23 @@ def job_public(j):
 
 def push_job(j):
     broadcast("job", job_public(j))
+
+
+def inside_download_dir(path):
+    """True only if `path` really resolves inside DOWNLOAD_DIR.
+
+    A plain `startswith` check is wrong: "<dl>Videos-evil\\x.mp4" starts with
+    "<dl>Videos" as a string but is a sibling directory, not a child. realpath
+    also collapses symlinks/junctions that could point outside the tree.
+    """
+    if not path:
+        return False
+    try:
+        base = os.path.realpath(DOWNLOAD_DIR)
+        target = os.path.realpath(path)
+        return os.path.commonpath([base, target]) == base and target != base
+    except (OSError, ValueError):
+        return False
 
 
 def error_payload(code, message, retryable=False, action=None):
@@ -234,6 +255,26 @@ def prune_inspections():
         for key, record in list(inspections.items()):
             if now - record["createdAt"] > INSPECTION_TTL:
                 inspections.pop(key, None)
+        # Hard cap: even inside the TTL window a caller could spam /inspect
+        # and grow this dict without bound. Drop the oldest beyond the cap.
+        if len(inspections) > MAX_INSPECTIONS:
+            oldest = sorted(inspections.items(), key=lambda kv: kv[1]["createdAt"])
+            for key, _ in oldest[: len(inspections) - MAX_INSPECTIONS]:
+                inspections.pop(key, None)
+
+
+def prune_jobs():
+    """Keep the finished-job tail bounded; running/queued jobs are never dropped."""
+    with lock:
+        if len(jobs) <= MAX_JOBS_KEPT:
+            return
+        finished = [
+            j for j in jobs.values()
+            if j["status"] in ("done", "error", "cancelled")
+        ]
+        finished.sort(key=lambda j: j.get("finished_at") or j["added_at"])
+        for j in finished[: len(jobs) - MAX_JOBS_KEPT]:
+            jobs.pop(j["id"], None)
 
 
 def inspect_url(url):
@@ -260,7 +301,9 @@ def inspect_url(url):
     hb.start()
 
     prune_inspections()
-    args = [YTDLP, "--dump-single-json", "--no-warnings", "--no-playlist", "--skip-download", url]
+    # "--" stops yt-dlp reading the URL as an option. The ^https?:// check
+    # above already blocks that, but keep the barrier explicit.
+    args = [YTDLP, "--dump-single-json", "--no-warnings", "--no-playlist", "--skip-download", "--", url]
     try:
         proc = subprocess.run(
             args,
@@ -371,7 +414,7 @@ def build_args(job):
         a += ["--sponsorblock-remove", "all"]
     if not job["playlist"]:
         a += ["--no-playlist"]
-    a.append(job["url"])
+    a += ["--", job["url"]]
     return a
 
 
@@ -504,12 +547,30 @@ def scheduler():
 
 
 def origin_ok(origin):
-    if not origin:
-        return True
     if origin == SITE_URL:
         return True
-    m = re.match(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$", origin)
-    return bool(m)
+    return bool(re.match(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$", origin or ""))
+
+
+def origin_allowed_for_write(handler):
+    """Guard state-changing requests against cross-site abuse.
+
+    The server listens on loopback, but *any* web page the user visits can
+    still reach 127.0.0.1:8619 from the browser. Reflecting the Origin back
+    only controls whether the attacker can *read* the response - the request
+    itself still executes. So POST/DELETE must reject unknown origins
+    outright, and must reject requests with no Origin at all (curl, <form>
+    submissions, and other non-CORS callers).
+    """
+    origin = handler.headers.get("Origin")
+    if origin:
+        return origin_ok(origin)
+    # No Origin header: only allow if this is clearly not a browser-driven
+    # cross-site request. Browsers always send Origin on POST/DELETE fetches.
+    sec_site = (handler.headers.get("Sec-Fetch-Site") or "").lower()
+    if sec_site in ("same-origin", "none"):
+        return True
+    return False
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -521,9 +582,11 @@ class Handler(BaseHTTPRequestHandler):
     def cors(self):
         o = self.headers.get("Origin", "")
         self.send_header("Access-Control-Allow-Origin", o if origin_ok(o) else "null")
+        self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.send_header("Access-Control-Allow-Private-Network", "true")
+        self.send_header("X-Content-Type-Options", "nosniff")
 
     def send_json(self, obj, code=200):
         body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
@@ -595,8 +658,14 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": False, "error": "not found"}, 404)
 
     def handle_events(self):
-        myq = queue.Queue()
+        # Bound both the number of streams and each stream's backlog. Without
+        # this, any page can open unlimited /events connections and a slow
+        # reader's queue grows until the process runs out of memory.
+        myq = queue.Queue(maxsize=SSE_QUEUE_MAX)
         with lock:
+            if len(sse_clients) >= MAX_SSE_CLIENTS:
+                self.send_json({"ok": False, "error": "too many event streams"}, 429)
+                return
             sse_clients.append(myq)
         self.send_response(200)
         self.cors()
@@ -627,6 +696,9 @@ class Handler(BaseHTTPRequestHandler):
         if path not in ("/inspect", "/jobs"):
             self.send_json({"ok": False, "error": "not found"}, 404)
             return
+        if not origin_allowed_for_write(self):
+            self.send_json({"ok": False, "error": "origin not allowed"}, 403)
+            return
         if (self.headers.get("Content-Type") or "").split(";")[0].strip().lower() != "application/json":
             self.send_json({"ok": False, "error": "content-type must be application/json"}, 415)
             return
@@ -651,11 +723,25 @@ class Handler(BaseHTTPRequestHandler):
         if not re.match(r"^https?://", url):
             self.send_json(error_payload("INVALID_URL", "Paste a complete http or https link.", False, "edit_url"), 400)
             return
+        if len(url) > 2048:
+            self.send_json(error_payload("INVALID_URL", "That link is too long.", False, "edit_url"), 400)
+            return
+        with lock:
+            active = sum(1 for x in jobs.values() if x["status"] in ("queued", "running"))
+        if active >= MAX_ACTIVE_JOBS:
+            self.send_json(error_payload("QUEUE_FULL", "Too many downloads are already queued. Wait for some to finish.", True, "retry"), 429)
+            return
         mode = data.get("mode", "video")
         quality = str(data.get("quality", "best"))
         audio_format = str(data.get("audioFormat", "mp3"))
         inspection_id = str(data.get("inspectionId") or "")
         format_id = str(data.get("formatId") or "")
+        # format_id is spliced into a yt-dlp -f selector. Even though args are
+        # passed as a list (no shell), an arbitrary string here is a format
+        # *expression* - restrict it to the shape real format ids have.
+        if format_id and not re.match(r"^[A-Za-z0-9_\-.+]{1,64}$", format_id):
+            self.send_json(error_payload("FORMAT_UNAVAILABLE", "That format id is not valid. Inspect the link again.", True, "inspect"), 400)
+            return
         selected_format = None
         if inspection_id:
             prune_inspections()
@@ -704,10 +790,14 @@ class Handler(BaseHTTPRequestHandler):
         }
         with lock:
             jobs[job["id"]] = job
+        prune_jobs()
         push_job(job)
         self.send_json({"ok": True, "job": job_public(job)}, 201)
 
     def do_DELETE(self):
+        if not origin_allowed_for_write(self):
+            self.send_json({"ok": False, "error": "origin not allowed"}, 403)
+            return
         parsed = urlparse(self.path)
         qs = parse_qs(parsed.query)
         parts = parsed.path.strip("/").split("/")
@@ -722,7 +812,7 @@ class Handler(BaseHTTPRequestHandler):
                 history.remove(entry)
                 save_history()
                 fp = entry.get("filepath")
-                if qs.get("file", ["0"])[0] == "1" and fp and os.path.abspath(fp).startswith(os.path.abspath(DOWNLOAD_DIR)) and os.path.exists(fp):
+                if qs.get("file", ["0"])[0] == "1" and inside_download_dir(fp) and os.path.isfile(fp):
                     try:
                         os.remove(fp)
                         deleted_file = True
