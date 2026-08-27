@@ -1,21 +1,28 @@
 {
   "manifest_version": 3,
-  "name": "Kaze Downloader",
-  "version": "2.2.0",
-  "description": "Effortless anime downloads from animepahe. Search, pick episodes, choose quality, save anywhere. Runs entirely in your browser.",
+  "name": "Kaze Anime",
+  "version": "2.3.0",
+  "description": "Anime downloads that show you what you are getting first. Search, pick episodes, see the real quality and size, save anywhere. Runs entirely in your browser.",
   "permissions": [
     "tabs",
     "storage",
     "downloads",
     "declarativeNetRequest",
     "webRequest",
-    "scripting"
+    "scripting",
+    "cookies"
   ],
   "host_permissions": [
     "https://animepahe.pw/*",
     "https://*.animepahe.pw/*",
+    "https://animepahe.com/*",
+    "https://*.animepahe.com/*",
+    "https://animepahe.org/*",
+    "https://*.animepahe.org/*",
     "https://pahe.win/*",
     "https://kwik.cx/*",
+    "https://animeheaven.me/*",
+    "https://*.animeheaven.me/*",
     "https://challenges.cloudflare.com/*"
   ],
   "optional_host_permissions": [
@@ -26,7 +33,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Open Kaze Downloader"
+    "default_title": "Open Kaze Anime"
   },
   "icons": {
     "16": "icons/icon16.png",

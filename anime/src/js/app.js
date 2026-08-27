@@ -20,7 +20,7 @@ const App = {
     this.state.source = Sources.active();
     UI.showScreen('discover');
     UI.status('idle', 'Idle');
-    UI.sourceLabel(this.state.source.label);
+    this.renderSourceSwitch();
     try { $('#verText').textContent = 'v' + chrome.runtime.getManifest().version; } catch {}
 
     try {
@@ -104,6 +104,49 @@ const App = {
     return (await handle.requestPermission({ mode: 'readwrite' })) === 'granted';
   },
 
+  renderSourceSwitch() {
+    const src = this.state.source;
+    UI.sourceSwitch(Sources.list(), Sources.activeId, this.state.running);
+    UI.sourceLabel(src.label);
+    UI.applyCapabilities(src.capabilities || {});
+    UI.sourceNote(this.sourceNoteFor(src));
+  },
+
+  sourceNoteFor(src) {
+    const caps = src.capabilities || {};
+    if (!caps.quality) {
+      return `${src.label} serves one file per episode - there is no quality to pick. Kaze measures the real video during inspection so you know what you are getting before it downloads.`;
+    }
+    return `${src.label} publishes several releases per episode. Kaze samples them so you can compare real qualities and sizes.`;
+  },
+
+  async switchSource(id) {
+    if (this.state.running) { toast('Finish or cancel the current job first.', 'warn'); return; }
+    if (id === Sources.activeId) return;
+
+    // Anything already on screen belongs to the previous source's id space -
+    // sessions, hashes and episode ids do not carry over.
+    try { this.state.source.cleanup(); } catch {}
+
+    this.state.source = Sources.use(id);
+    this.state.title = null;
+    this.state.episodes = [];
+    this.state.inspection = null;
+    this.state.selectedSourceKey = null;
+    this.state.audio = 'sub';
+    this.state.lastResults = [];
+    this.state.lastQuery = '';
+
+    UI.setAudio('sub');
+    UI.results([], '');
+    UI.discoverState(null);
+    this.renderSourceSwitch();
+    UI.status('idle', `Source: ${this.state.source.label}`);
+
+    const q = $('#searchInput').value.trim();
+    if (q) this.doSearch(q);
+  },
+
   backToResults() {
     UI.showScreen('discover');
     if (this.state.lastResults.length) {
@@ -118,7 +161,15 @@ const App = {
     else UI.status('busy', 'Searching');
 
     try {
-      const results = await this.state.source.search(q);
+      const results = await this.state.source.search(q, {
+        // Some sources fill in details after the first paint. Re-render in
+        // place so cards go from bare titles to full metadata without the
+        // user having to search again.
+        onUpdate: () => {
+          if (seq !== this._searchSeq) return;
+          UI.results(this.state.lastResults, this.state.lastQuery);
+        },
+      });
       if (seq !== this._searchSeq) return;
       this.state.lastQuery = q;
       this.state.lastResults = results;
@@ -127,9 +178,14 @@ const App = {
       UI.status(results.length ? 'ok' : 'idle', results.length ? `${results.length} found` : 'No results');
     } catch (e) {
       if (seq !== this._searchSeq) return;
-      if (!quiet) UI.discoverState('error', `Search failed: ${e.message}`);
+      const msg = e && e.message ? e.message : String(e);
+      const other = Sources.list().find((s) => s.id !== Sources.activeId);
+      const hint = other
+        ? `${msg}. ${this.state.source.label} may be down or blocked - try ${other.label} instead.`
+        : msg;
+      if (!quiet) UI.discoverState('error', `Search failed: ${hint}`);
       else UI.status('err', 'Search failed');
-      toast(`Search failed: ${e.message}`, 'err');
+      toast(`Search failed: ${hint}`, 'err', 6500);
     }
   },
 
@@ -226,6 +282,8 @@ const App = {
 
       if (inspection.unverified) {
         toast('Could not verify sources for these episodes. You can still try a download.', 'warn', 5200);
+      } else if (inspection.mixedQuality) {
+        toast('Sampled episodes had different resolutions - some may be lower than shown.', 'warn', 6000);
       }
     } catch (e) {
       if (!isStale()) {
@@ -309,11 +367,12 @@ const App = {
     UI.buildQueue(eps.length);
     eps.forEach((ep, i) => UI.setQueueRow(i, ep.num));
     UI.globalProgress(eps.length, 0);
-    UI.logLine(`Job started: ${this.state.title.title} eps ${eps[0].num}-${eps[eps.length - 1].num}, ${src.quality}, group=${src.group}, audio=${src.audio}`);
+    UI.logLine(`Job started via ${this.state.source.label}: ${this.state.title.title} eps ${eps[0].num}-${eps[eps.length - 1].num}, ${src.quality}, group=${src.group}, audio=${src.audio}`);
     UI.showScreen('queue');
 
     this.state.running = true;
     UI.status('busy', 'Downloading');
+    this.renderSourceSwitch();
 
     const fractions = new Array(eps.length).fill(0);
 
@@ -349,6 +408,7 @@ const App = {
 
     this.state.running = false;
     this.state.source.cleanup();
+    this.renderSourceSwitch();
 
     if (summary.cancelled) {
       UI.logLine('Job cancelled.');

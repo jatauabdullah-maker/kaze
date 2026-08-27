@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Kaze Downloader</title>
+<title>Kaze Anime</title>
 <link rel="stylesheet" href="styles.css" />
-<link rel="icon" href="../icons/icon48.png" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%238b7cf8'/%3E%3Cpath d='M15 27h21a6 6 0 1 0-6-6M13 37h29a6 6 0 1 1-6 6M19 46h11' stroke='%23fff' stroke-width='4.5' stroke-linecap='round' fill='none'/%3E%3C/svg%3E">
 </head>
 <body>
 <canvas id="confetti"></canvas>
@@ -54,8 +54,11 @@
     <section class="screen active" id="screen-discover">
       <div class="hero">
         <h1>Download anime<br />with the sources in view.</h1>
-        <p>Pick a series and your episodes, then Kaze checks what each release actually offers before anything downloads. Source: <b id="sourceLabel">AnimePahe</b></p>
+        <p>Pick a series and your episodes, then Kaze checks what each release actually offers before anything downloads.</p>
       </div>
+
+      <div class="source-switch" id="sourceSwitch" role="group" aria-label="Choose a source site"></div>
+      <p class="source-note" id="sourceNote"></p>
 
       <form class="searchbar" id="searchForm">
         <svg class="search-ico" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="m20 20-3.2-3.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -191,6 +194,7 @@
 <script src="js/confetti.js"></script>
 <script src="js/pipeline.js"></script>
 <script src="js/sources/animepahe.js"></script>
+<script src="js/sources/animeheaven.js"></script>
 <script src="js/sources/registry.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/app.js"></script>

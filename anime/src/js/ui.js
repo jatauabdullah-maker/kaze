@@ -31,6 +31,43 @@ const UI = (() => {
     if (n) n.textContent = label;
   }
 
+  /**
+   * Render the source switcher. Each source states plainly what it can and
+   * cannot give you, so the choice is informed rather than a coin flip.
+   */
+  function sourceSwitch(sources, activeId, busy) {
+    const box = $('#sourceSwitch');
+    if (!box) return;
+    box.innerHTML = '';
+    if (sources.length < 2) { box.hidden = true; return; }
+    box.hidden = false;
+
+    for (const s of sources) {
+      const b = el('button', 'source-pick' + (s.id === activeId ? ' active' : ''));
+      b.type = 'button';
+      b.disabled = Boolean(busy);
+      b.appendChild(el('span', 'sp-name', s.label));
+
+      const caps = s.capabilities || {};
+      const traits = [];
+      if (caps.quality) traits.push('quality choice');
+      else traits.push('one quality');
+      if (caps.dub) traits.push('sub + dub');
+      else traits.push('sub only');
+      b.appendChild(el('span', 'sp-traits', traits.join(' · ')));
+
+      b.addEventListener('click', () => App.switchSource(s.id));
+      box.appendChild(b);
+    }
+  }
+
+  function sourceNote(text) {
+    const n = $('#sourceNote');
+    if (!n) return;
+    n.textContent = text || '';
+    n.hidden = !text;
+  }
+
   function discoverState(mode, message) {
     const box = $('#discoverState');
     if (!mode) { box.hidden = true; box.innerHTML = ''; return; }
@@ -56,6 +93,16 @@ const UI = (() => {
       const c = el('button', 'card');
       c.type = 'button';
 
+      if (a.poster) {
+        const img = document.createElement('img');
+        img.className = 'card-poster';
+        img.src = a.poster;
+        img.alt = '';
+        img.loading = 'lazy';
+        img.addEventListener('error', () => img.remove());
+        c.appendChild(img);
+      }
+
       const body = el('div', 'card-body');
       const top = el('div', 'card-top');
       top.appendChild(el('div', 'card-title', a.title));
@@ -72,6 +119,7 @@ const UI = (() => {
       if (a.episodeCount != null) chips.appendChild(el('span', 'chip hl', `${a.episodeCount} eps`));
       if (a.status) chips.appendChild(el('span', 'chip', a.status));
       if (a.season && a.year) chips.appendChild(el('span', 'chip', `${a.season} ${a.year}`));
+      else if (a.year) chips.appendChild(el('span', 'chip', String(a.year)));
       body.appendChild(chips);
 
       c.appendChild(body);
@@ -152,6 +200,52 @@ const UI = (() => {
       return;
     }
 
+    // Sources with a fixed quality have nothing to choose between, so say what
+    // you are getting instead of presenting a one-item menu as a decision.
+    if (inspection.fixedQuality) {
+      const only = rows[0];
+      const note = el('div', 'fixed-quality');
+      const head = el('div', 'fq-head');
+      head.appendChild(el('span', 'src-q', only.quality));
+      head.appendChild(el('span', 'fq-tag', 'only option'));
+      note.appendChild(head);
+
+      if (only.height) {
+        // Read straight out of the MP4 header, so these are facts rather than
+        // estimates. Show the numbers that answer "is this worth the bytes".
+        const facts = el('div', 'fq-facts');
+        const add = (label, value) => {
+          if (!value) return;
+          const f = el('span', 'fq-fact');
+          f.appendChild(el('b', '', value));
+          f.appendChild(document.createTextNode(' ' + label));
+          facts.appendChild(f);
+        };
+        add('resolution', only.width ? `${only.width}x${only.height}` : `${only.height}p`);
+        if (only.seconds) {
+          const m = Math.floor(only.seconds / 60);
+          const s = only.seconds % 60;
+          add('per episode', `${m}:${String(s).padStart(2, '0')}`);
+        }
+        if (only.sizeMB) add('per episode', `${only.sizeMB.toFixed(0)} MB`);
+        if (only.mbps) add('bitrate', `${only.mbps} Mbps`);
+        if (only.codec) add('codec', only.codec.toUpperCase());
+        note.appendChild(facts);
+        note.appendChild(el('p', 'fq-note',
+          'This site serves one file per episode - there is no quality menu. Kaze read these numbers from the video file itself before downloading it.'));
+      } else {
+        note.appendChild(el('p', 'fq-note',
+          'This site serves one file per episode and Kaze could not read its resolution, so the quality is unknown until it downloads.'));
+      }
+
+      if (inspection.mixedQuality) {
+        note.appendChild(el('p', 'fq-warn',
+          'Sampled episodes did not all match - some may be lower than shown.'));
+      }
+      list.appendChild(note);
+      return;
+    }
+
     for (const s of rows) {
       const row = el('button', 'src-row' + (selectedKey === s.key ? ' selected' : ''));
       row.type = 'button';
@@ -196,6 +290,15 @@ const UI = (() => {
       b.disabled = b.dataset.audio === 'dub' && !enableDub;
       b.title = b.disabled ? 'No dubbed sources found for these episodes' : '';
     });
+  }
+
+  /**
+   * Hide controls a source genuinely cannot honour, rather than showing them
+   * disabled and letting the user wonder what they did wrong.
+   */
+  function applyCapabilities(caps) {
+    const seg = $('#audioSeg');
+    if (seg) seg.hidden = !caps.dub;
   }
 
   function folder(name) {
@@ -329,9 +432,9 @@ const UI = (() => {
   }
 
   return {
-    showScreen, status, sourceLabel, discoverState, results, details,
+    showScreen, status, sourceLabel, sourceSwitch, sourceNote, discoverState, results, details,
     episodeTotal, episodeSummary, inspectEnabled, inspecting,
-    sourceList, inspectionSummary, setAudio, audioSeg, folder,
+    sourceList, inspectionSummary, setAudio, audioSeg, applyCapabilities, folder,
     estimate, startHint, startEnabled, queueHeader, buildQueue, setQueueRow,
     episodeStatus, episodeFilename, episodeSize, episodeProgress,
     globalProgress, logLine, done,

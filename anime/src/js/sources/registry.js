@@ -43,6 +43,13 @@ const Sources = (() => {
   return { register, list, get, use, active, can, get activeId() { return activeId; } };
 })();
 
+// Registration order sets the default. AnimePahe first: it offers real quality
+// and dub choice, so it is the better default when it is reachable. AnimeHeaven
+// is the fallback and has no Cloudflare, so it keeps working when AnimePahe is
+// blocked or its domain rotates.
 if (typeof AnimePaheSource !== 'undefined') {
   Sources.register(AnimePaheSource);
+}
+if (typeof AnimeHeavenSource !== 'undefined') {
+  Sources.register(AnimeHeavenSource);
 }

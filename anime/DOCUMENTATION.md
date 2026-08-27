@@ -1,8 +1,8 @@
 # Kaze Anime - Engineering Documentation
 
-**Version:** 2.2.0 | **Platform:** Chrome Manifest V3 | **Location:** `anime/` in the [kaze](https://github.com/jatauabdullah-maker/kaze) monorepo
+**Version:** 2.3.0 | **Platform:** Chrome Manifest V3 | **Location:** `anime/` in the [kaze](https://github.com/jatauabdullah-maker/kaze) monorepo
 
-Standalone anime downloader for AnimePahe. Search -> pick episodes -> inspect sources -> pick a verified source -> pick folder -> download to disk.
+Standalone anime downloader with two interchangeable sources (AnimePahe and AnimeHeaven). Search -> pick episodes -> inspect sources -> pick a verified source -> pick folder -> download to disk.
 
 Part of the Kaze family. Its sibling lives in the same repo: `video/` (video grabber + local yt-dlp server). Both share one design system - dark `#0a0b0f`, violet-to-cyan gradient (`#8b7cf8` -> `#4cc3f0`), aurora + wind-streak background, Space Grotesk / Inter type. Keep the look consistent when touching the UI.
 
@@ -22,39 +22,167 @@ This document records every design decision, observed site behavior, and bug fou
 | `src/js/idb.js` | Tiny IndexedDB wrapper. Persists the picked `FileSystemDirectoryHandle`. |
 | `src/js/confetti.js` | Canvas confetti (no deps). `Confetti.celebrate()`. |
 | `src/js/pipeline.js` | **The engine.** All networking, Cloudflare handling, parsing, streaming, file writing. IIFE exposing `Pipeline`. |
-| `src/js/sources/animepahe.js` | **Source adapter.** Normalizes search/episodes/source-inspection/run against the engine. Exposes `capabilities`. |
+| `src/js/sources/animepahe.js` | **Source adapter.** Normalizes search/episodes/source-inspection/run against `pipeline.js`. Exposes `capabilities`. |
+| `src/js/sources/animeheaven.js` | **Source adapter.** Self-contained: its own fetch/parse/download path plus the MP4 header probe. No Cloudflare, no work tabs. |
 | `src/js/sources/registry.js` | Source registry (`Sources`). Registers adapters, resolves the active provider, checks capabilities. |
 | `src/js/ui.js` | Rendering module (`UI`). Screens, cards, source rows, queue rows, progress, toasts. No business logic. |
 | `src/js/app.js` | Orchestrator (`App`). Wires DOM events to the active source adapter; owns UI state. |
 | `icons/` | Generated from the in-app logo (gradient + wind glyph). |
 
-**Load order matters:** `util.js → idb.js → confetti.js → pipeline.js → sources/animepahe.js → sources/registry.js → ui.js → app.js` (classic scripts, no modules, no build step).
+**Load order matters:** `util.js → idb.js → confetti.js → pipeline.js → sources/animepahe.js → sources/animeheaven.js → sources/registry.js → ui.js → app.js` (classic scripts, no modules, no build step).
 
 ---
 
-## 1a. Source Adapter Layer (v2.2.0)
+## 1a. Source Adapter Layer (two sources since v2.3.0)
 
-`app.js` no longer talks to `Pipeline` directly. It calls the **active source adapter** (`Sources.active()`), which owns the provider-specific behavior:
+`app.js` never talks to `Pipeline` directly. It calls the **active source adapter**
+(`Sources.active()`), which owns all provider-specific behaviour:
 
 ```
-search(query)                        → normalized titles { id, title, type, episodeCount, score, ... }
-getEpisodes(titleId)                 → normalized episodes { num, id, titleId, audio, duration }
-inspectSources(episodes, { isStale, onSample }) → inspection { sources[], sampledOk, dubAvailable, ... }
-run(cfg, hooks)                      → Pipeline.run with adapter-mapped quality/audio
+search(query, { onUpdate })           -> titles { id, title, type, episodeCount, score, poster, ... }
+getEpisodes(titleId)                  -> episodes { num, id, titleId, audio, duration }
+inspectSources(episodes, { isStale, onSample }) -> inspection { sources[], sampledOk, ... }
+run(cfg, hooks)                       -> downloads, reporting progress through hooks
 cancel() / cleanup() / ensureAccess() / isBusy()
 ```
 
-Each adapter publishes `capabilities` (search, episodes, sourceInspection, quality, fansubGroups, dub, ...). Adding a new anime source = registering a new adapter that produces the same shapes. The UI, queue, and download flow do not change.
+Registered in `registry.js`. **Registration order sets the default** - AnimePahe
+first, because it offers real quality and dub choice.
 
-**Source states** computed by `inspectSources`:
+| | AnimePahe | AnimeHeaven |
+|---|---|---|
+| Cloudflare / Turnstile | yes, needs a tab handoff | **none** |
+| Hops to the video | 3 (pahe.win -> kwik.cx -> CDN) | **1** (gate.php -> CDN) |
+| Referer rewriting | required (`declarativeNetRequest`) | not needed |
+| Work tabs | required | **not used at all** |
+| Quality choice | 360p/720p/1080p, multiple groups | one file per episode |
+| Dub | yes | no |
+| Posters in results | blocked (see below) | yes |
+| Episode metadata | from the API | measured from the file |
+
+### Capabilities drive the UI
+
+Each adapter publishes a `capabilities` object, and the UI **hides** what a
+source cannot honour rather than showing dead controls:
+
+- `dub: false` hides the SUB/DUB segmented control entirely.
+- `quality: false` replaces the source list with a single "only option" panel.
+- `posters: false` skips the card image.
+- `measuredQuality: true` means the numbers came from probing the real file.
+
+### Source states
 
 | state | meaning |
 |---|---|
 | `verified` | found in every sampled episode |
 | `partial` | found in some samples only (chip shows `n/total sampled`) |
-| `unverified` | inspection failed entirely; safe fallback quality set is offered |
+| `unverified` | inspection failed entirely; a safe fallback set is offered |
 
-Sampling picks first / middle / last of the selected range (max 3), spaced 350ms apart, honoring `isStale` so a changed range cancels the in-flight probe. Sizes are averaged over samples.
+AnimePahe samples first / middle / last of the selected range (max 3), 350ms
+apart. AnimeHeaven probes the first and middle episode (max 2), 400ms apart.
+Both honour `isStale` so changing the range cancels an in-flight probe.
+
+---
+
+## 1b. AnimeHeaven Pipeline
+
+Four steps, no Cloudflare, no work tabs. All verified live 2026-08.
+
+```
+search.php?s=<query>   -> a[href^="anime.php"]  (title in .similarname, poster in img.coverimg)
+anime.php?<id>         -> a[href="gate.php"], id attr = 32-hex hash, .watch2 = episode label
+cookie key=<hash>      -> chrome.cookies.set on animeheaven.me
+gate.php               -> "Download Episode N" anchor = direct .mp4
+```
+
+**The gate is not a real gate.** Their `gatea()` writes the episode hash into a
+`key` cookie and `gate.php` reads it back. No token, nothing signed. But it *is*
+mandatory - without the cookie `gate.php` returns **404**.
+
+`document.cookie` cannot be used: this page is a `chrome-extension://` origin, so
+it can only set cookies on itself. Hence the **`cookies` permission** in the
+manifest and `chrome.cookies.set()`. This is the only reason that permission
+exists.
+
+### Episode labels are not integers
+
+Verified live, and each case broke a naive `Number(raw)` parse:
+
+| label | meaning | source |
+|---|---|---|
+| `24` | normal release | everywhere |
+| `24ch` | alternate audio cut | To Be Hero X lists all 24 episodes twice |
+| `7.5` | recap / special | [Oshi no Ko] |
+
+The parser takes a leading number, keeps any suffix as a `variant` tag, and
+prefers the unsuffixed cut when a number appears twice. Without the dedupe, To Be
+Hero X shows 48 entries for 24 episodes; without the suffix handling, half the
+list silently vanishes.
+
+Episodes are listed **newest first** on the page and sorted ascending before
+returning, because the rest of the app assumes ascending order.
+
+### CDN hosts rotate
+
+The download host changes between requests - `co`, `ct`, `ci`, `cv`, `po`, `rk`
+have all been observed for the same episode. Always read the host from the page;
+never cache it.
+
+---
+
+## 1c. Reading the real quality (MP4 header probe)
+
+AnimeHeaven advertises nothing about resolution. Parsing the container is the
+only honest way to say what a download will be, and it costs **16 KB** of a
+~200 MB file.
+
+`probeFile()` sends one Range request and reads:
+
+- **resolution** from the `avc1` VisualSampleEntry (width at +28, height at +30)
+- **duration** from `mvhd` (v0 and v1 layouts both handled)
+- **total size** from the 206 response's `content-range: bytes 0-16383/202051404`
+- **bitrate** derived from size and duration - the honest tell for whether a
+  720p file is a good one or a bloated re-encode
+
+Measured live: `1280x720 avc1, 26:00, 199 MB, 1.07 Mbps`. Identical results at
+8 KB, 16 KB and 64 KB, so 16 KB is enough.
+
+**Two traps, both hit during development:**
+
+1. The string `avc1` appears **twice**. The `ftyp` box's compatible-brands list
+   literally contains it (`isomiso2avc1mp41`), and that hit yields `0x0`. Skip
+   past `ftyp` before searching.
+2. **One request only.** This CDN stalls when two requests for the same file are
+   in flight - a lone Range request answers in under a second, while a Range plus
+   a size request in parallel both hang past 60s. That produced the symptom
+   "size shown, quality unknown". The `content-range` header makes the second
+   request unnecessary anyway.
+
+A `<video preload="metadata">` probe was tried first and removed: the CDN sends
+`Access-Control-Allow-Origin: https://animeheaven.me`, and a media element does
+not get the host-permission CORS bypass that `fetch()` does.
+
+---
+
+## 1d. AnimePahe posters do not work
+
+The search API returns a `poster` URL, but `i.animepahe.pw` serves it only to an
+`animepahe.pw` page. Tested every angle:
+
+| attempt | result |
+|---|---|
+| from an animepahe.pw page | loads (2000x3000) |
+| `<img>` from a foreign origin | fails |
+| direct fetch, no cookies | 403 |
+| with `Referer: https://animepahe.pw/` | 403 |
+| `referrerPolicy` no-referrer / origin / unsafe-url | all fail |
+| with a valid `SameSite=None` `cf_clearance` cookie | still 403 |
+
+The host keys off `Sec-Fetch-Site`, a forbidden header an extension cannot forge.
+`posters` is therefore `false` and `toTitle()` drops the URL rather than
+rendering a broken image. Fetching each poster through a work tab and
+blob-URLing it would work, but at 2000x3000 per result that is a lot of
+bandwidth for decoration.
 
 ---
 
@@ -98,8 +226,8 @@ Sampling picks first / middle / last of the selected range (max 3), spaced 350ms
 ### 3.3 Quality discovery (probe)
 - **Called through the source adapter** (`AnimePaheSource.inspectSources`, §1a) — the engine below is unchanged.
 - Fetch the play page's **raw HTML** (no JS execution needed) and parse anchors:
-  - Selector: `a[href*="pahe.win"]`
-  - Text format: `Group · Qp (sizeMB)` with optional ` eng` suffix → `{ group, quality: "1080p", sizeMB, dub }`.
+ - Selector: `a[href*="pahe.win"]`
+ - Text format: `Group · Qp (sizeMB)` with optional ` eng` suffix → `{ group, quality: "1080p", sizeMB, dub }`.
 - Probe up to 3 episodes of the selected range (first / middle / last), **sequentially with 350ms gaps** (rate limiting).
 - Builds the source rows (with ≈ MB/ep), fansub group, SUB/DUB availability, and **verified / partial / unverified** states.
 - If ALL probes fail → fallback source set (360/720/1080, no sizes) + warning toast. Never dead-end the user.
@@ -118,8 +246,8 @@ Sampling picks first / middle / last of the selected range (max 3), spaced 350ms
 ### 3.5 kwik form extraction (must render JS!)
 - **The kwik `/f/{id}` page builds its download form CLIENT-SIDE** (obfuscated inline script + `/app/js/downstream.js`). The raw HTML has **no form** — verified. DOM-scraping the raw fetch returns null.
 - Therefore: a **kwik work tab** navigates to the kwik URL and we poll its DOM via `chrome.scripting.executeScript`:
-  - `form[action*="/d/"]` → `action` + `input[name="_token"]`
-  - Real filename from `<title>`: `AnimePahe_..._1080p_SubsPlease.mp4 :: Kwik` (strip ` :: Kwik`).
+ - `form[action*="/d/"]` → `action` + `input[name="_token"]`
+ - Real filename from `<title>`: `AnimePahe_..._1080p_SubsPlease.mp4 :: Kwik` (strip ` :: Kwik`).
 - If the tab shows a challenge → handoff (focus + banner + poll). If the tab was closed → clear error; auto-reopens next episode.
 - The tab is **reused across episodes** (one tab total), and sent to `about:blank` after each extraction (kills ad scripts, nothing for the user to mis-click).
 
@@ -144,7 +272,14 @@ Sampling picks first / middle / last of the selected range (max 3), spaced 350ms
 
 ## 4. Site Intelligence (observed 2026-08, keep updated!)
 
-### 4.1 animepahe.pw
+### 4.1 animepahe (.pw / .com / .org)
+- **They rotate TLDs.** Their own site banner states the live set is
+  `animepahe.pw`, `animepahe.com`, `animepahe.org`; `.com` and `.org` both 301 to
+  whichever is current. `pipeline.js` probes all three via `resolveBase()` and
+  caches the first that answers, treating a 403 as alive-but-challenged. A TLD
+  change no longer needs a release.
+- **`animepahe.ru` is NOT them any more.** It redirects to `animepahe.su`, a
+  parked "domain for sale" page. Do not add it.
 - CF-managed challenge on first visit; clearance (`cf_clearance` cookie) lasts ~1 year.
 - API endpoints are XHR-friendly and return JSON (see §3.1–3.2).
 - Play pages: ad scripts exist that can hijack top-level navigation (observed redirect to ad landing). **Never rely on tab navigation for play pages — fetch raw HTML from the work tab instead.**
@@ -164,6 +299,20 @@ Sampling picks first / middle / last of the selected range (max 3), spaced 350ms
 - **TLS-fingerprint gated:** curl / Node clients get 403 *even with a perfect browser UA + Referer + fresh URL*. Only real browser network-stack requests pass.
 - Signed URLs are short-lived/single-use — mint them fresh per episode (the POST does that).
 - Hosts vary (`owocdn.top`, `uwucdn.top` observed). This is why the manifest requests **optional `http://*/*` + `https://*/*`** at first Start (`Pipeline.ensureBroadAccess()`).
+
+### 4.6 animeheaven.me
+- **No Cloudflare at all.** Plain Apache. This is the whole reason it is a good
+  fallback: none of the Turnstile machinery in §4.5 applies.
+- **It rate-limits by concurrency, not by rate.** Parallel requests produce
+  `ERR_CONNECTION_TIMED_OUT` for ~15s and recover only after backing off. Search
+  metadata hydration is capped at 2 concurrent with a 300ms gap; episode probes
+  run sequentially with a 400ms gap.
+- Search results carry **only** a title and a poster. Year, score, episode count
+  and tags require a follow-up fetch of each series page - that is what
+  `hydrate()` does, in the background, so results paint immediately.
+- Search is loose: querying "oshi no ko" also returns "My Deer Friend Nokotan".
+  That is their matching, not a parse bug.
+- Poster images are **not** hotlink-protected (unlike animepahe's).
 
 ### 4.5 Cloudflare / Turnstile — handling strategy
 1. **Detection:** status 403/503, OR body contains `Just a moment` (pahe.win serves its challenge with **HTTP 200** — status-only detection misses it!).
@@ -199,15 +348,35 @@ The hardest bugs lived here. Rules the current code follows — **do not regress
 
 ## 7. UI Notes
 
-- **Full-tab app, not a popup** (deliberate). `background.js` focuses the existing app tab on toolbar-icon click.
-- **Posters removed deliberately:** `i.animepahe.pw` blocks hotlinking from `chrome-extension://` origins (images 403). Cards are text-first: title + ★score + chips.
-- **Dark native controls:** `color-scheme: dark` on `:root` + explicit `select option` colors — otherwise the fansub dropdown renders white-on-white.
-- **Icons** are rendered from the *same* logo as the UI header (gradient rounded square + wind SVG) for consistency. Regenerate by screenshotting the logo at 512px and downscaling (bicubic) to 128/48/16.
-- **Version badge** in the header (`v2.1.0`) reads `chrome.runtime.getManifest().version` — **bump the manifest version on every code change** so testers can verify they're running new code.
-- **Cancel** reloads the whole app page (`location.reload()`) after aborting — guarantees a clean slate.
-- **Confetti** on success (canvas, self-contained). Done screen shows count, size, time, destination folder name.
+**Source switcher** (discover screen, `#sourceSwitch`). Only rendered when more
+than one source is registered. Each pill states the tradeoff plainly - "quality
+choice / sub + dub" vs "one quality / sub only" - so the choice is informed.
+Disabled while a job runs. Switching resets title, episodes, inspection and
+results, because session ids and episode hashes do not carry between sources.
 
----
+**Capabilities hide controls, they do not disable them.** `dub: false` removes the
+SUB/DUB segment entirely rather than greying it out. `quality: false` replaces the
+source list with a single panel that says so, plus the measured facts:
+
+```
+720p  [only option]
+1280x720 resolution   26:00 per episode   199 MB per episode   1.07 Mbps bitrate   AVC1 codec
+This site serves one file per episode - there is no quality menu.
+Kaze read these numbers from the video file itself before downloading it.
+```
+
+Showing a one-item menu as if it were a decision is worse than saying there is no
+decision to make.
+
+**Search hydration.** `search()` takes an `onUpdate` callback. AnimeHeaven paints
+titles and posters immediately, then re-renders as year/score/episode-count land.
+
+**Favicon.** All three Kaze surfaces use the identical inline-SVG data URI with a
+**flat** `#8b7cf8` fill. Do not point this at the gradient PNG: at 16px the ramp
+averages to `#7BA9F5`, which reads visibly blue-cyan next to the siblings.
+
+**Cards** render a poster when the source provides one, with an `error` handler
+that removes the image rather than leaving a broken frame.
 
 ## 8. Bug Archaeology (every fight, so you don't refight it)
 
@@ -232,6 +401,20 @@ The hardest bugs lived here. Rules the current code follows — **do not regress
 | 17 | Toolbar icon ≠ app logo | Hand-drawn icon | Icons regenerated from the actual UI logo |
 
 ---
+
+**v2.3.0 round**
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Extension logo looked blue vs the sibling apps | in-page logo was a bare glyph over a CSS `120deg` gradient at stroke-width 6; the sibling uses a self-contained SVG with its own rect, `135deg`, stroke 4.5 | copied the sibling's SVG verbatim |
+| Toolbar/tab icon still blue | favicon pointed at the gradient PNG; at 16px the ramp averages to `#7BA9F5` (green +45 over target) | use the same flat `#8b7cf8` inline SVG the siblings use |
+| Solver window flickered; Chrome minimized; focus never returned to Kaze | app was focused *then* the work window minimized - minimizing reassigns focus, stealing it straight back. `focusTab` also forced `state:'normal'`, un-maximizing a maximized window. `rawFetch` re-entered `humanSolve` while clearance settled | `returnToApp()` minimizes first then focuses, with verify-and-retry; only un-minimize; 20s per-host clearance grace |
+| AnimeHeaven quality read "unknown" but size appeared | Range probe and size probe fired via `Promise.all`; that CDN stalls on concurrent requests to one file | single Range request; size comes from `content-range` |
+| MP4 parse returned `0x0` | `avc1` matched the `ftyp` compatible-brands string first | skip past the `ftyp` box before searching |
+| Half of To Be Hero X's episodes vanished | `Number('24ch')` -> `NaN` -> silently skipped | parse leading number, keep suffix as `variant`, dedupe |
+| First 5 downloaded the *last* 5 | AnimeHeaven lists episodes newest-first | sort ascending in `getEpisodes()` |
+| AnimeHeaven cards were blank | search page has no metadata, and the card UI never rendered posters | background `hydrate()` + poster `<img>` |
+
 
 ## 9. Testing (the harness)
 
@@ -285,30 +468,71 @@ node test.js
 
 ## 11. Known Limitations
 
-- One job at a time (by design; Start is locked while running).
-- Closing the app tab mid-job kills it (beforeunload warns first).
-- "Open folder" can't be launched from the extension for FS-Access picks — the done screen shows the folder name + copy button instead.
-- Downloads go at CDN speed; no parallel chunking (single stream per episode, episodes sequential).
-- If Chrome wipes third-party-cookie exceptions or the profile, the one-time checkbox clicks return (clearance re-earn).
-- kwik/pahe ad scripts occasionally navigate work tabs — drift healing recovers, but a stray banner flash is possible.
+**Both sources**
+- Episode range inputs are **positions, not episode numbers**. With a 7.5 special
+  in the list, position 8 is episode 7.5.
+- No resume. A cancelled or failed episode restarts from zero.
 
----
+**AnimePahe**
+- Needs one human click per site for Turnstile (animepahe, pahe.win, kwik.cx),
+  once per profile.
+- Posters cannot be shown - see §1d.
+- The CDN is TLS-fingerprint gated, so downloads must come from real browser
+  network requests (§4.4).
 
-## 12. Quick Reference — Endpoints & Selectors
+**AnimeHeaven**
+- One quality per episode, no choice. Measured 720p on every file sampled so far,
+  but that is an observation, not a guarantee - the probe reports whatever is
+  actually there.
+- No dub, no fansub groups, no subtitle selection.
+- Alternate audio cuts (`24ch`) are detected and deduped, but only the
+  unsuffixed cut is offered. Downloading a specific variant is not exposed.
+- Stalls under concurrent load, so inspection is deliberately slower than
+  AnimePahe's.
+
+## 12. Quick Reference - Endpoints & Selectors
+
+### AnimePahe
 
 ```
-SEARCH    GET https://animepahe.pw/api?m=search&q={q}
-EPISODES  GET https://animepahe.pw/api?m=release&id={sessionUUID}&sort=episode_asc&page={n}
-PLAY      GET https://animepahe.pw/play/{animeSession}/{epSession}
-          └─ parse: a[href*="pahe.win"] → "Group · 1080p (215MB) [eng]"
+BASE      resolveBase() probes .pw -> .com -> .org, caches the first that answers
+SEARCH    GET {BASE}/api?m=search&q={q}
+EPISODES  GET {BASE}/api?m=release&id={sessionUUID}&sort=episode_asc&page={n}
+PLAY      GET {BASE}/play/{animeSession}/{epSession}
+            -> parse: a[href*="pahe.win"]  ->  "Group - 1080p (215MB) [eng]"
 PAHE      GET http://pahe.win/{code}   (from parked pahe.win tab, XHR)
-          └─ regex: /https?:\/\/kwik\.cx\/[ef]\/([A-Za-z0-9]+)/
+            -> regex: /https?:\/\/kwik\.cx\/[ef]\/([A-Za-z0-9]+)/
 KWIK      TAB https://kwik.cx/f/{id}   (JS-rendered!)
-          └─ DOM: form[action*="/d/"] + input[name="_token"] + <title> filename
-DOWNLOAD  POST {form action}  body: _token=…   (from kwik tab, redirect:'manual')
-          └─ webRequest captures 302 Location → CDN URL
+            -> DOM: form[action*="/d/"] + input[name="_token"] + <title> filename
+DOWNLOAD  POST {form action}  body: _token=...   (from kwik tab, redirect:'manual')
+            -> webRequest captures 302 Location -> CDN URL
 STREAM    GET {cdnUrl}  from extension page (DNR Referer: https://kwik.cx/)
-WRITE     dirHandle.getFileHandle(name,{create:true}) → createWritable() → chunk writes
+WRITE     dirHandle.getFileHandle(name,{create:true}) -> createWritable() -> chunk writes
 ```
+
+### AnimeHeaven
+
+```
+SEARCH    GET https://animeheaven.me/search.php?s={q}
+            -> a[href^="anime.php"]        id = href.split('?')[1]
+            -> .similarname a              title
+            -> img.coverimg                poster (NOT hotlink-protected)
+SERIES    GET https://animeheaven.me/anime.php?{id}
+            -> a[href="gate.php"]          id attr = 32-hex episode hash
+            -> .watch2                     label: "24" | "24ch" | "7.5"
+            -> .infoyear                   "Episodes: 24 Year: 2025 Score: 8.6/10"
+            -> .infotitle / .infotitlejp / .infotags a / .infoimg img
+GATE      chrome.cookies.set({url:'https://animeheaven.me/', name:'key', value:hash})
+          GET https://animeheaven.me/gate.php     (404 without the cookie)
+            -> a containing "Download"     direct .mp4
+            -> video source                fallback, 3 rotating mirrors
+PROBE     GET {mp4}  Range: bytes=0-16383   ONE request only
+            -> skip ftyp box, find avc1     width +28, height +30
+            -> mvhd                         timescale + duration
+            -> content-range                total size after the slash
+STREAM    GET {mp4}  credentials:'omit'
+WRITE     same as AnimePahe
+```
+
 
 *Generated 2026-08-24 · Kaze Downloader v2.1.0 · Built with too much coffee and one very patient tester.*

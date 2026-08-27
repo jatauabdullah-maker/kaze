@@ -11,13 +11,32 @@ accounts.
 
 | Directory | Product | Type |
 |---|---|---|
-| `anime/` | **Kaze Anime** - search AnimePahe, pick episodes, inspect what each release offers, batch download | Chrome extension (MV3) |
+| `anime/` | **Kaze Anime** - search AnimePahe or AnimeHeaven, pick episodes, see the real quality and size, batch download | Chrome extension (MV3) |
 | `video/` | **Kaze Video** - paste any link, see real formats as pills, download to disk | Web UI + local server |
 | `server/` | The local companion server for Kaze Video | Python + yt-dlp |
 
 `anime/` and `video/` are independent - you can use either without the other.
 They share a design system, and `anime/src/js/sources/registry.js` is the
 adapter layer new sources plug into.
+
+### Two sources, honestly labelled
+
+Kaze Anime ships two sources and tells you what each one can actually do rather
+than pretending they are equivalent:
+
+| | AnimePahe | AnimeHeaven |
+|---|---|---|
+| Quality choice | 360p / 720p / 1080p, multiple fansub groups | one file per episode |
+| Dub | yes | no |
+| Security checks | one click per site, once | none |
+| Speed to first download | slower (3 hops) | faster (1 hop) |
+
+AnimeHeaven publishes nothing about resolution, so Kaze reads it out of the video
+file itself - a 16 KB range request returns the exact resolution, duration, size
+and bitrate before a full download starts. No more discovering a 200 MB file is
+720p after the fact.
+
+If one source is unreachable, switch to the other; they are independent.
 
 ## Install
 
@@ -78,7 +97,12 @@ The extension has no build step either. Edit files in `anime/` and hit reload
 on `chrome://extensions`.
 
 Load order in `anime/` matters and is not managed by a bundler:
-`util → idb → confetti → pipeline → sources/animepahe → sources/registry → ui → app`.
+`util → idb → confetti → pipeline → sources/animepahe → sources/animeheaven → sources/registry → ui → app`.
+
+Adding a source means writing one adapter in `anime/src/js/sources/` that returns
+the shapes in `registry.js` and declares honest `capabilities`. The UI, queue and
+download flow do not change. `anime/DOCUMENTATION.md` documents the contract and
+every site quirk found so far.
 
 After changing frontend CSS or JS, bump the `?v=` query on the `<link>` and
 `<script>` tags in that directory's `index.html`, or browsers will serve stale

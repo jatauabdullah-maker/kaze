@@ -1,7 +1,43 @@
 'use strict';
 
 const Pipeline = (() => {
-  const BASE = 'https://animepahe.pw';
+  // AnimePahe rotates TLDs. Per their own site banner the live set is
+  // .pw / .com / .org, and .com and .org 301 to whichever is current.
+  // .ru is NOT them any more - it redirects to a parked domain-for-sale page.
+  // Probe in order and cache the first that answers, so a TLD change does not
+  // need a new release.
+  const DOMAINS = [
+    'https://animepahe.pw',
+    'https://animepahe.com',
+    'https://animepahe.org',
+  ];
+  let BASE = DOMAINS[0];
+
+  async function resolveBase() {
+    for (const origin of DOMAINS) {
+      try {
+        const r = await fetch(`${origin}/api?m=search&q=a`, {
+          credentials: 'include',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        // A Cloudflare challenge (403) still proves the host is theirs and
+        // reachable - the tab handoff will clear it. Only a network error or
+        // a redirect off-domain means this TLD is dead.
+        if (r.status === 200 || r.status === 403) {
+          if (new URL(r.url).hostname.endsWith('animepahe.pw') ||
+              new URL(r.url).hostname.includes('animepahe')) {
+            BASE = new URL(r.url).origin;
+            return BASE;
+          }
+        }
+      } catch {
+        /* try the next TLD */
+      }
+    }
+    BASE = DOMAINS[0];
+    return BASE;
+  }
+
   const APP_PATH = (typeof chrome !== 'undefined' && chrome.runtime?.getURL)
     ? chrome.runtime.getURL('src/index.html')
     : 'chrome-extension://kaze/src/index.html';
@@ -134,8 +170,15 @@ const Pipeline = (() => {
       }
       if (!looksLikeChallenge(res.status, res.text)) return res;
       if (opts.noSolve || solving) return res;
+      // Just solved this host: give the site a beat and retry instead of
+      // throwing the user back into another solve. Re-entering here is what
+      // made the window flicker.
+      if (recentlyCleared(hostname)) {
+        await sleep(1500);
+        continue;
+      }
       log(`Security check triggered on ${hostname}`);
-      stage(`Security check on ${hostname} — handing you the tab`);
+      stage(`Security check on ${hostname} - handing you the tab`);
       solving = true;
       let solved = false;
       try {
@@ -181,16 +224,62 @@ const Pipeline = (() => {
       await chrome.tabs.update(tabId, { active });
       if (active) {
         const tab = await chrome.tabs.get(tabId);
-        await chrome.windows.update(tab.windowId, { focused: true, state: 'normal' });
+        const win = await chrome.windows.get(tab.windowId).catch(() => null);
+        const upd = { focused: true };
+        // Only un-minimize. Forcing state:'normal' unconditionally would
+        // un-maximize a window the user had maximized - that was part of why
+        // returning to the app looked like Chrome resizing itself.
+        if (win && win.state === 'minimized') upd.state = 'normal';
+        await chrome.windows.update(tab.windowId, upd);
       }
     } catch {}
+  }
+
+  // Remember which hosts were just cleared. Without this, rawFetch's retry loop
+  // can re-enter humanSolve immediately after a successful solve (the next
+  // request may still 403 for a moment), which showed up as the solver window
+  // flickering open and shut.
+  const clearedAt = new Map();
+  const CLEARANCE_GRACE_MS = 20000;
+
+  function recentlyCleared(hostname) {
+    const t = clearedAt.get(hostname);
+    return Boolean(t && Date.now() - t < CLEARANCE_GRACE_MS);
+  }
+
+  async function returnToApp(workTabId) {
+    // Order matters. Minimizing the solver window AFTER focusing the app makes
+    // the OS move focus again as the window disappears, so the app never keeps
+    // it - that is the "doesn't switch back to Kaze" symptom. Put the solver
+    // away first, then hand focus over as the final action.
+    await minimizeWorkWindow();
+    await sleep(120);
+
+    const appTab = await findAppTab();
+    if (!appTab) {
+      if (workTabId !== undefined) await focusTab(workTabId, false);
+      return;
+    }
+
+    // Focusing can lose a race with the window that is being minimized, so
+    // confirm it actually took and retry once.
+    for (let i = 0; i < 2; i++) {
+      await focusTab(appTab.id, true);
+      await sleep(180);
+      try {
+        const win = await chrome.windows.get(appTab.windowId);
+        if (win.focused && win.state !== 'minimized') return;
+      } catch {
+        return;
+      }
+    }
   }
 
   async function humanSolve(url, tabId) {
     const u = new URL(url);
     await chrome.tabs.update(tabId, { url: u.origin + '/', active: true }).catch(() => undefined);
     await focusTab(tabId, true);
-    injectBanner(tabId, 'Kaze needs ONE click: solve the security checkbox — it continues automatically');
+    injectBanner(tabId, 'Kaze needs ONE click: solve the security checkbox - it continues automatically');
 
     setTimeout(() => {
       chrome.scripting.executeScript({
@@ -204,15 +293,13 @@ const Pipeline = (() => {
       await sleep(2500);
       if (activeJob?.cancelled) return false;
       const probe = await tabFetch(tabId, url, { cache: 'no-store' });
-          if (probe.status === 200 && !looksLikeChallenge(200, probe.text)) {
-            const appTab = await findAppTab();
-            if (appTab) await focusTab(appTab.id, true);
-            else await focusTab(tabId, false);
-            await minimizeWorkWindow();
-            stage('Security check passed — continuing');
-            log(`Clearance obtained for ${u.hostname}`);
-            return true;
-          }
+      if (probe.status === 200 && !looksLikeChallenge(200, probe.text)) {
+        clearedAt.set(u.hostname, Date.now());
+        stage('Security check passed - continuing');
+        log(`Clearance obtained for ${u.hostname}`);
+        await returnToApp(tabId);
+        return true;
+      }
     }
     return false;
   }
@@ -235,6 +322,7 @@ const Pipeline = (() => {
   /* ── animepahe API ────────────────────────────────────────── */
 
   async function search(q) {
+    await resolveBase();
     const j = await fetchJson(`${BASE}/api?m=search&q=${encodeURIComponent(q)}`);
     return Array.isArray(j.data) ? j.data : [];
   }
@@ -378,12 +466,11 @@ const Pipeline = (() => {
       }
       if (handedOff) {
         handedOff = false;
-        stage('Security check passed — continuing');
+        stage('Security check passed - continuing');
         log('Clearance obtained for pahe.win');
-        injectBanner(tabId, 'Solved — Kaze is continuing automatically');
-        const appTab = await findAppTab();
-        if (appTab) await focusTab(appTab.id, true);
-        await minimizeWorkWindow();
+        injectBanner(tabId, 'Solved - Kaze is continuing automatically');
+        clearedAt.set('pahe.win', Date.now());
+        await returnToApp(tabId);
       }
       const kwik = await extractViaXhr();
       if (kwik) {
@@ -495,12 +582,11 @@ const Pipeline = (() => {
         }
         if (handedOff) {
           handedOff = false;
-          stage('Security check passed — continuing');
+          stage('Security check passed - continuing');
           log('Clearance obtained for kwik.cx');
-          injectBanner(tabId, 'Kaze is controlling this tab — no action needed');
-          const appTab = await findAppTab();
-          if (appTab) await focusTab(appTab.id, true);
-          await minimizeWorkWindow();
+          injectBanner(tabId, 'Kaze is controlling this tab - no action needed');
+          clearedAt.set('kwik.cx', Date.now());
+          await returnToApp(tabId);
         }
         if (probe?.token && probe?.action) {
           const captureP = captureRedirect(['https://kwik.cx/d/*']);
@@ -814,6 +900,8 @@ const Pipeline = (() => {
     cancel,
     closeSolverTabs,
     ensureBroadAccess,
+    resolveBase,
+    activeBase: () => BASE,
     isBusy: () => activeJob && !activeJob.finished,
   };
 })();

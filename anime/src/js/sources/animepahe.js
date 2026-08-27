@@ -12,8 +12,17 @@ const AnimePaheSource = (() => {
     quality: true,
     fansubGroups: true,
     dub: true,
+    // The search API DOES return a poster URL, but i.animepahe.pw refuses to
+    // serve it to anything except an animepahe.pw page. Verified: 403 with no
+    // cookies, 403 with an explicit Referer, and an <img> fails from a foreign
+    // origin under every referrerPolicy - even with a valid SameSite=None
+    // cf_clearance cookie present. The host keys off Sec-Fetch-Site, which is
+    // a forbidden header an extension cannot forge.
+    // Fetching each poster through the work tab and blob-URLing it would work,
+    // but the files are 2000x3000 - too much bandwidth for decoration.
     posters: false,
     selectableSubtitles: false,
+    measuredQuality: false,  // the site publishes real sizes, no probing needed
   };
 
   function toTitle(a) {
@@ -26,7 +35,9 @@ const AnimePaheSource = (() => {
       season: a.season || '',
       year: a.year || null,
       score: a.score == null ? null : Number(a.score),
-      poster: a.poster || '',
+      // Deliberately dropped: see the posters note in `capabilities`. Passing
+      // the URL through would only render a broken image.
+      poster: '',
     };
   }
 
