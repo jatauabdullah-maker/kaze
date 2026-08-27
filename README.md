@@ -12,11 +12,10 @@ accounts.
 | Directory | Product | Type |
 |---|---|---|
 | `anime/` | **Kaze Anime** - search AnimePahe, pick episodes, inspect what each release offers, batch download | Chrome extension (MV3) |
-| `site/` | **Kaze Video** - paste any link, see real formats as pills, download to disk | Web UI + local server |
+| `video/` | **Kaze Video** - paste any link, see real formats as pills, download to disk | Web UI + local server |
 | `server/` | The local companion server for Kaze Video | Python + yt-dlp |
-| `showcase/` | **Kaze Hub** - the front page for both products | Static site |
 
-`anime/` and `site/` are independent - you can use either without the other.
+`anime/` and `video/` are independent - you can use either without the other.
 They share a design system, and `anime/src/js/sources/registry.js` is the
 adapter layer new sources plug into.
 
@@ -70,8 +69,8 @@ cd server
 python -m py_compile server.py     # syntax check
 python server.py                   # needs bin\yt-dlp.exe (run Kaze.bat option 1)
 
-# any of the three frontends - they're static, no build step
-cd site        # or showcase
+# any of the frontends - they're static, no build step
+cd video
 python -m http.server 8080
 ```
 

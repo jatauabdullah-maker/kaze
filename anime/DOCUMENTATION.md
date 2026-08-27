@@ -4,7 +4,7 @@
 
 Standalone anime downloader for AnimePahe. Search -> pick episodes -> inspect sources -> pick a verified source -> pick folder -> download to disk.
 
-Part of the Kaze family. Siblings live in the same repo: `site/` (video grabber + local yt-dlp server) and `showcase/` (the hub page). All three share one design system - dark `#0a0b0f`, violet-to-cyan gradient (`#8b7cf8` -> `#4cc3f0`), aurora + wind-streak background, Space Grotesk / Inter type. Keep the look consistent when touching the UI.
+Part of the Kaze family. Its sibling lives in the same repo: `video/` (video grabber + local yt-dlp server). Both share one design system - dark `#0a0b0f`, violet-to-cyan gradient (`#8b7cf8` -> `#4cc3f0`), aurora + wind-streak background, Space Grotesk / Inter type. Keep the look consistent when touching the UI.
 
 This document records every design decision, observed site behavior, and bug fought, so the project can be picked up and safely updated when the source sites change.
 
